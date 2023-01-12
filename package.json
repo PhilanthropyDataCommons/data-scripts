@@ -1,0 +1,33 @@
+{
+  "name": "data-scripts",
+  "version": "1.0.0",
+  "description": "",
+  "main": "dist/generateCanonicalFieldsInserts.js",
+  "scripts": {
+    "build": "npm run cleanup && npm run build:node",
+    "build:node": "tsc -p tsconfig.json",
+    "cleanup": "rimraf dist",
+    "lint": "eslint ./src --ext .ts",
+    "test": "echo \"no tests\" && exit 1",
+    "generateCanonicalFieldsInserts": "node dist/generateCanonicalFieldsInserts.js",
+    "generateApplicationFormJson": "node dist/generateApplicationFormJson.js"
+  },
+  "author": "",
+  "license": "AGPL-3.0-or-later",
+  "devDependencies": {
+    "@tsconfig/node18": "^1.0.1",
+    "@types/node": "^18.11.11",
+    "@typescript-eslint/eslint-plugin": "^5.45.1",
+    "@typescript-eslint/parser": "^5.45.1",
+    "eslint": "^8.29.0",
+    "eslint-config-airbnb-base": "^15.0.0",
+    "eslint-config-airbnb-typescript": "^17.0.0",
+    "eslint-plugin-import": "^2.26.0",
+    "eslint-plugin-sort-exports": "^0.8.0",
+    "typescript": "^4.9.3"
+  },
+  "dependencies": {
+    "csv-reader": "^1.0.10",
+    "ts-command-line-args": "^2.3.1"
+  }
+}
