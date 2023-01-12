@@ -10,7 +10,7 @@ Each script should have a corresponding `npm` command. To list scripts, use `npm
 
 First, build the scripts:
 
-`npm build`
+`npm run build`
 
 Second, run a script with a `--` between the name and its arguments:
 
