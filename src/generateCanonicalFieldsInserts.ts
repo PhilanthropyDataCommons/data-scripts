@@ -30,7 +30,9 @@ psvInput.pipe(
   }),
 ).on('data', (row: Object) => {
   const record = Object.values(row)[0];
+  //regex to remove extra quotes and correct quotes hierarchy i.e. \" inside datatype string enclosed by \' 
   const string = record.replace(/\"/g,'\'').replace(/\'\'/g,'\"')
+  //split on the basis of comma but don't consider commas inside quotes
   const values = string.match(/('.*?'|[^',\s]+)(?=\s*,|\s*$)/g)
 
   const id = values[0];
@@ -38,14 +40,15 @@ psvInput.pipe(
   const shortCode = values[2];
   const dataType = values[3];
 
-  if( label[0] === '\"'){
+  //remove enclosing single qoutes of label field having comma separated value 
+  if( label[0] === '\''){
     label = label.slice(1,-1)
   }
   if (firstRowArrived) {
-      sqlOutput.write(`,${os.EOL}(${id}, '${label}' , '${shortCode}', ${dataType} )`);
+    sqlOutput.write(`,${os.EOL}(${id}, '${label}' , '${shortCode}', ${dataType} )`);
   }
   else {
-      sqlOutput.write(`(${id}, '${label}', '${shortCode}', ${dataType})`);
+    sqlOutput.write(`(${id}, '${label}', '${shortCode}', ${dataType})`);
   }
   firstRowArrived = true;
 }).on('end', () => {
