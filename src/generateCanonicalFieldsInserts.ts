@@ -1,4 +1,4 @@
-// Takes a pipe-separated values file and creates a canonical fields INSERT SQL file.
+// Takes a comma-separated values file and creates a canonical fields INSERT SQL file.
 import fs from 'fs';
 import os from 'os';
 import CsvReadableStream from 'csv-reader';
