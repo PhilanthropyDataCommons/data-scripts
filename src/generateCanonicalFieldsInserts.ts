@@ -14,41 +14,31 @@ const args = parse<Args>({
   outputFile: String,
 });
 
-const psvInput = fs.createReadStream(args.inputFile, 'utf8');
+const csvInput = fs.createReadStream(args.inputFile, 'utf8');
 const sqlOutput = fs.createWriteStream(args.outputFile, 'utf8');
 
 sqlOutput.write(`INSERT INTO canonical_fields (id, label, short_code, data_type) OVERRIDING SYSTEM VALUE VALUES${os.EOL}`);
 
 let firstRowArrived = false;
-psvInput.pipe(
+csvInput.pipe(
   new CsvReadableStream({
     parseNumbers: true,
     parseBooleans: true,
     trim: true,
-    delimiter: '|',
+    allowQuotes: true,
     asObject: true,
   }),
-).on('data', (row: Object) => {
-  const record = Object.values(row)[0];
-  //regex to remove extra quotes and correct quotes hierarchy i.e. \" inside datatype string enclosed by \' 
-  const string = record.replace(/\"/g,'\'').replace(/\'\'/g,'\"')
-  //split on the basis of comma but don't consider commas inside quotes
-  const values = string.match(/('.*?'|[^',\s]+)(?=\s*,|\s*$)/g)
+).on('data', (row: any) => {
+  const rowID = row['ID'];
+  const label = row['Label'];
+  const shortCode = row['Internal field name'];
+  const dataType = row['Type'];
 
-  const id = values[0];
-  let label = values[1];
-  const shortCode = values[2];
-  const dataType = values[3];
-
-  //remove enclosing single qoutes of label field having comma separated value 
-  if( label[0] === '\''){
-    label = label.slice(1,-1)
-  }
   if (firstRowArrived) {
-    sqlOutput.write(`,${os.EOL}(${id}, '${label}' , '${shortCode}', ${dataType} )`);
+    sqlOutput.write(`,${os.EOL}(${rowID}, '${label}' , '${shortCode}', '${dataType}' )`);
   }
   else {
-    sqlOutput.write(`(${id}, '${label}', '${shortCode}', ${dataType})`);
+    sqlOutput.write(`(${rowID}, '${label}', '${shortCode}', '${dataType}' )`);
   }
   firstRowArrived = true;
 }).on('end', () => {
