@@ -17,7 +17,7 @@ const args = parse<Args>({
 const csvInput = fs.createReadStream(args.inputFile, 'utf8');
 const sqlOutput = fs.createWriteStream(args.outputFile, 'utf8');
 
-sqlOutput.write(`INSERT INTO canonical_fields (id, label, short_code, data_type) OVERRIDING SYSTEM VALUE VALUES${os.EOL}`);
+sqlOutput.write(`INSERT INTO canonical_fields (label, short_code, data_type) VALUES${os.EOL}`);
 
 let firstRowArrived = false;
 csvInput.pipe(
@@ -29,16 +29,15 @@ csvInput.pipe(
     asObject: true,
   }),
 ).on('data', (row: any) => {
-  const rowID = row['ID'];
   const label = row['Label'];
   const shortCode = row['Internal field name'];
   const dataType = row['Type'];
 
   if (firstRowArrived) {
-    sqlOutput.write(`,${os.EOL}(${rowID}, '${label}' , '${shortCode}', '${dataType}' )`);
+    sqlOutput.write(`,${os.EOL}('${label}', '${shortCode}', '${dataType}' )`);
   }
   else {
-    sqlOutput.write(`(${rowID}, '${label}', '${shortCode}', '${dataType}' )`);
+    sqlOutput.write(`('${label}', '${shortCode}', '${dataType}' )`);
   }
   firstRowArrived = true;
 }).on('end', () => {
