@@ -74,7 +74,7 @@ axios('https://api.philanthropydatacommons.org/canonicalFields',{
     const id = funder + ': external ID';
     const pos = funder + ': form position';
     let field: CanonicalField[] | any;
-    if ( row[id] !== '' ) {
+    if (row[id] !== '') {
       const shortCode = row['Internal field name'];
       field = fields.filter(e  => e['shortCode'] === shortCode);
       const applicationFormField: ApplicationFormField = {
