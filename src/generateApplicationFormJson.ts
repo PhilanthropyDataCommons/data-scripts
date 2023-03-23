@@ -10,6 +10,7 @@ interface Args {
   opportunityId: number;
   funder: string;
   bearerToken: string;
+  apiUrl: string;
 }
 
 interface csvRow {
@@ -38,14 +39,13 @@ const args = parse<Args>({
   outputFile: String,
   opportunityId: Number,
   funder: String,
-  bearerToken: String
+  bearerToken: String,
+  apiUrl: String
 });
 
 const csvInput = fs.createReadStream(args.inputFile, 'utf8');
 const jsonOutput = fs.createWriteStream(args.outputFile, 'utf8');
-const { opportunityId } = args;
-const { funder } = args;
-const { bearerToken } = args;
+const { opportunityId, funder, bearerToken, apiUrl } = args;
 
 let applicationForm: ApplicationForm = {
     opportunityId,
@@ -53,7 +53,7 @@ let applicationForm: ApplicationForm = {
 }
 let counter = 0;
 
-axios('https://api.philanthropydatacommons.org/canonicalFields',{
+axios(apiUrl+'/canonicalFields',{
   'method': 'GET',
   'headers' : {
     'accept': 'application/json',
