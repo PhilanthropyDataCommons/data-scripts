@@ -1,16 +1,15 @@
 // Takes a csv file and creates a JSON body for POST /applicationForms.
-import dotenv from 'dotenv';
 import fs from 'fs';
 import CsvReadableStream from 'csv-reader';
 import { parse } from 'ts-command-line-args';
 import  axios  from 'axios'
 import { AxiosError } from 'axios';
-dotenv.config()
 interface Args {
   inputFile: string;
   outputFile: string;
   opportunityId: number;
   funder: string;
+  bearerToken: string;
 }
 
 interface csvRow {
@@ -39,23 +38,26 @@ const args = parse<Args>({
   outputFile: String,
   opportunityId: Number,
   funder: String,
+  bearerToken: String
 });
 
 const csvInput = fs.createReadStream(args.inputFile, 'utf8');
 const jsonOutput = fs.createWriteStream(args.outputFile, 'utf8');
 const { opportunityId } = args;
 const { funder } = args;
+const { bearerToken } = args;
 
 let applicationForm: ApplicationForm = {
     opportunityId,
     fields: [],
 }
+let counter = 0;
 
 axios('https://api.philanthropydatacommons.org/canonicalFields',{
   'method': 'GET',
   'headers' : {
     'accept': 'application/json',
-    'x-api-key': process.env.apiKey
+    'Authorization': 'Bearer ' + bearerToken
   }
 }).then((response) => {
   let fields: CanonicalField[] = response.data;
@@ -72,12 +74,12 @@ axios('https://api.philanthropydatacommons.org/canonicalFields',{
     const id = funder + ': external ID';
     const pos = funder + ': form position';
     let field: CanonicalField[] | any;
-    if(row[id] !== ''){
+    if ( row[id] !== '' ) {
       const shortCode = row['Internal field name'];
-      field = fields.filter( e  => e['shortCode']==shortCode );
+      field = fields.filter(e  => e['shortCode'] === shortCode);
       const applicationFormField: ApplicationFormField = {
         canonicalFieldId: field[0].id,
-        position: row[pos],
+        position: row[pos] === '' ? counter++ : row[pos],
         label: row[label],
       }
       applicationForm.fields.push(applicationFormField);
