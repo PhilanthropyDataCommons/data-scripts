@@ -2,8 +2,7 @@
 import fs from 'fs';
 import CsvReadableStream from 'csv-reader';
 import { parse } from 'ts-command-line-args';
-import axios from 'axios'
-import { AxiosError } from 'axios';
+import axios, { AxiosError } from 'axios'
 
 interface Args {
   inputFile: string;
