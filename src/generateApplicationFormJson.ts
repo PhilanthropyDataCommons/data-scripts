@@ -40,7 +40,7 @@ const args = parse<Args>({
   opportunityId: Number,
   funder: String,
   bearerToken: String,
-  apiUrl: String
+  apiUrl: String,
 });
 
 const csvInput = fs.createReadStream(args.inputFile, 'utf8');
@@ -57,8 +57,8 @@ axios(apiUrl+'/canonicalFields',{
   'method': 'GET',
   'headers' : {
     'accept': 'application/json',
-    'Authorization': 'Bearer ' + bearerToken
-  }
+    'Authorization': 'Bearer ' + bearerToken,
+  },
 }).then((response) => {
   let fields: CanonicalField[] = response.data;
   csvInput.pipe(
