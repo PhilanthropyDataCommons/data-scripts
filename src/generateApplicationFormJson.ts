@@ -13,9 +13,7 @@ interface Args {
   apiUrl: string;
 }
 
-interface csvRow {
-  [key: string]: any;
-}
+type csvRow = Record<string, any>;
 interface ApplicationFormField {
   canonicalFieldId: number;
   position: number;
