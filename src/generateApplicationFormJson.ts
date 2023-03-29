@@ -56,10 +56,10 @@ let applicationForm: ApplicationForm = {
 let counter = 0;
 
 axios(apiUrl + '/canonicalFields', {
-  'method': 'GET',
-  'headers': {
-    'accept': 'application/json',
-    'Authorization': 'Bearer ' + bearerToken,
+  method: 'GET',
+  headers: {
+    accept: 'application/json',
+    Authorization: 'Bearer ' + bearerToken,
   },
 }).then((response) => {
   let fields: CanonicalField[] = response.data;
