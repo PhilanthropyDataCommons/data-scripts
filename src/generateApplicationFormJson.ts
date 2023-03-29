@@ -79,7 +79,7 @@ axios(apiUrl + '/canonicalFields', {
     let field: CanonicalField[] | any;
     if (row[id] !== '') {
       const shortCode = row['Internal field name'];
-      field = fields.filter(e => e['shortCode'] === shortCode);
+      field = fields.filter((e) => e['shortCode'] === shortCode);
       const applicationFormField: ApplicationFormField = {
         canonicalFieldId: field[0].id,
         position: row[pos] === '' ? counter++ : row[pos],
