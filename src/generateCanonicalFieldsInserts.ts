@@ -35,8 +35,7 @@ csvInput.pipe(
 
   if (firstRowArrived) {
     sqlOutput.write(`,${os.EOL}('${label}', '${shortCode}', '${dataType}' )`);
-  }
-  else {
+  } else {
     sqlOutput.write(`('${label}', '${shortCode}', '${dataType}' )`);
   }
   firstRowArrived = true;
