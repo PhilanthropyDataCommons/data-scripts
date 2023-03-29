@@ -2,8 +2,9 @@
 import fs from 'fs';
 import CsvReadableStream from 'csv-reader';
 import { parse } from 'ts-command-line-args';
-import  axios  from 'axios'
+import axios from 'axios'
 import { AxiosError } from 'axios';
+
 interface Args {
   inputFile: string;
   outputFile: string;
@@ -45,17 +46,19 @@ const args = parse<Args>({
 
 const csvInput = fs.createReadStream(args.inputFile, 'utf8');
 const jsonOutput = fs.createWriteStream(args.outputFile, 'utf8');
-const { opportunityId, funder, bearerToken, apiUrl } = args;
+const {
+  opportunityId, funder, bearerToken, apiUrl,
+} = args;
 
 let applicationForm: ApplicationForm = {
-    opportunityId,
-    fields: [],
+  opportunityId,
+  fields: [],
 }
 let counter = 0;
 
-axios(apiUrl+'/canonicalFields',{
+axios(apiUrl + '/canonicalFields', {
   'method': 'GET',
-  'headers' : {
+  'headers': {
     'accept': 'application/json',
     'Authorization': 'Bearer ' + bearerToken,
   },
@@ -76,7 +79,7 @@ axios(apiUrl+'/canonicalFields',{
     let field: CanonicalField[] | any;
     if (row[id] !== '') {
       const shortCode = row['Internal field name'];
-      field = fields.filter(e  => e['shortCode'] === shortCode);
+      field = fields.filter(e => e['shortCode'] === shortCode);
       const applicationFormField: ApplicationFormField = {
         canonicalFieldId: field[0].id,
         position: row[pos] === '' ? counter++ : row[pos],
