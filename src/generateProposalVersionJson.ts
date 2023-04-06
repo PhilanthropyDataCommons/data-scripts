@@ -88,7 +88,7 @@ const headers = {
 
 let count = 1;
 let lastCount = 0;
-const requestTimeoutMs = 2000;
+const requestTimeoutMs = 20000;
 
 try {
   let form = (await
@@ -112,8 +112,6 @@ try {
     })
   ).data;
 
-  const applicants = (await axios.get<Applicant[]>(`${apiUrl}/applicants`, { headers })).data;
-
   csvInput.pipe(
     new CsvReadableStream({
       parseNumbers: false,
@@ -125,10 +123,19 @@ try {
   ).on('data', async (row: csvRow) => {
     // First, we need the applicant id (not its external id), so look it up.
     // Extract the applicant external id from the given field name.
-    const applicantExternalId = row[applicantColumnName];
-    console.log(`applicant external id: ${applicantExternalId}`);
+    const applicantExternalId: string = row[applicantColumnName];
     let applicant: Applicant | undefined;
-    let finalApplicant: Applicant;    
+    let finalApplicant: Applicant;
+
+    const applicants = (
+      await axios.get<Applicant[]>(
+        `${apiUrl}/applicants`,
+        {
+          timeout: requestTimeoutMs,
+          headers,
+        }
+      )
+    ).data;
 
     if (applicants !== undefined && applicants.length > 0) {
       applicant = applicants.filter(a => a.externalId === applicantExternalId)[0];
@@ -147,6 +154,7 @@ try {
       ).data;
     }
 
+    console.log(`applicant external id: ${applicantExternalId}`);
     if (applicant === undefined) {
       throw new Error('Could not GET or POST an applicant.');
     } else {
@@ -211,13 +219,16 @@ try {
       const formFields: ApplicationFormField[] = form.fields.filter(field => field.label === key);
       if (formFields.length === 1) {
         const formField = formFields[0];
-        if (formField !== undefined) {
+        const fieldValue = row[key];
+        if (formField !== undefined && fieldValue !== null && fieldValue !== '') {
           const proposalValue: ProposalFieldValue = {
             applicationFormFieldId: formField.id,
             position: formField.position,
             value: row[key],
           }
           proposalVersion.fieldValues.push(proposalValue);
+        } else {
+          console.log(`Field value for '${key}' for proposal '${finalProposal.id}' was null or empty: skipped.`);
         }
       }
       else {

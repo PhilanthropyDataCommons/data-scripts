@@ -31,7 +31,7 @@ interface CanonicalField {
   label: string;
   shortCode: string;
   dataType: string;
-  createdAt: string;
+  createdAt: Date;
 }
 
 const args = parse<Args>({
@@ -70,11 +70,12 @@ axios(apiUrl+'/canonicalFields',{
       asObject: true,
     }),
   ).on('data', (row: csvRow) => {
+    csvInput.pause();
     const label = funder + ': field label';
     const id = funder + ': external ID';
     const pos = funder + ': form position';
     let field: CanonicalField[] | any;
-    if (row[id] !== '') {
+    if (row[label] !== '') {
       const shortCode = row['Internal field name'];
       field = fields.filter(e  => e['shortCode'] === shortCode);
       const applicationFormField: ApplicationFormField = {
@@ -84,7 +85,9 @@ axios(apiUrl+'/canonicalFields',{
       }
       applicationForm.fields.push(applicationFormField);
     }
-  }).on('end', () => {
+    csvInput.resume();
+  }).on('end', async () => {
+    await new Promise((resolve) => setTimeout(resolve, 3000));
     jsonOutput.write(JSON.stringify(applicationForm));
     jsonOutput.close();
   });
