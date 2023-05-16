@@ -2,7 +2,7 @@
 import fs from 'fs';
 import CsvReadableStream from 'csv-reader';
 import { parse } from 'ts-command-line-args';
-import  axios  from 'axios'
+import axios from 'axios'
 import { AxiosError } from 'axios';
 
 interface Args {
@@ -61,6 +61,10 @@ interface Proposal {
   readonly createdAt: Date;
 }
 
+interface Bundle<T> {
+  entries: T[];
+}
+
 type ProposalWrite = Omit<Proposal, 'createdAt' | 'id' | 'versions'>;
 
 const args = parse<Args>({
@@ -88,7 +92,7 @@ const headers = {
 
 let count = 1;
 let lastCount = 0;
-const requestTimeoutMs = 20000;
+const requestTimeoutMs = 60000;
 
 try {
   let form = (await
@@ -103,14 +107,16 @@ try {
   console.log(JSON.stringify(form));
 
   const proposals = (await
-    axios.get<Proposal[]>(`${apiUrl}/proposals`, {
+    axios.get<Bundle<Proposal>>(`${apiUrl}/proposals`, {
       headers,
       params: {
         _page: 1,
         _count: 100000,
       }
     })
-  ).data;
+  ).data.entries;
+
+  console.log(`Proposals found: ${proposals}`);
 
   csvInput.pipe(
     new CsvReadableStream({
@@ -124,6 +130,7 @@ try {
     // First, we need the applicant id (not its external id), so look it up.
     // Extract the applicant external id from the given field name.
     const applicantExternalId: string = row[applicantColumnName];
+    console.log(`Posting or getting applicant with externalId=${applicantExternalId}`)
     let applicant: Applicant | undefined;
     let finalApplicant: Applicant;
 
@@ -142,32 +149,53 @@ try {
     }
 
     if (applicant === undefined) {
-      applicant = (
-        await axios.post(
-          `${apiUrl}/applicants`,
-          { externalId: applicantExternalId },
-          {
-            timeout: requestTimeoutMs,
-            headers,
-          },
-        )
-      ).data;
+      try {
+        applicant = (
+          await axios.post(
+            `${apiUrl}/applicants`,
+            { externalId: applicantExternalId },
+            {
+              timeout: requestTimeoutMs,
+              headers,
+            },
+          )
+        ).data;
+      } catch (error: any) {
+        if (error instanceof AxiosError
+          && error.response !== undefined
+          && error.response.status === 409) {
+          console.log(`Got a 409 when posting applicant ${applicantExternalId}, getting again.`);
+          // Get the applicants again.
+          const applicantsAgain = (
+            await axios.get<Applicant[]>(
+              `${apiUrl}/applicants`,
+              {
+                timeout: requestTimeoutMs,
+                headers,
+              }
+            )
+          ).data;
+
+          if (applicantsAgain !== undefined && applicantsAgain.length > 0) {
+            applicant = applicantsAgain.filter(a => a.externalId === applicantExternalId)[0];
+          }
+        }
+      }
     }
 
-    console.log(`applicant external id: ${applicantExternalId}`);
     if (applicant === undefined) {
       throw new Error('Could not GET or POST an applicant.');
     } else {
       finalApplicant = applicant;
     }
 
-    console.log(`Applicant id: ${finalApplicant.id}`);
+    console.log(`Applicant PDC id: ${finalApplicant.id}`);
 
     // Second, we need a proposal ID for the given applicant/opportunity/externalid combination.
     // We assume the applicant has been found or created above and that the opportunity has been
     // created before the application form. We get the opportunity ID from the application form.
     // Extract the proposal external id from the given field name.
-    const proposalExternalId = row[proposalExternalIdColumnName];
+    const proposalExternalId: string = row[proposalExternalIdColumnName];
     console.log(`proposal external id: ${proposalExternalId}`);
     let proposal: Proposal | undefined;
     let finalProposal: Proposal;
@@ -175,19 +203,20 @@ try {
     // Pick the only existing proposal with given opportunity id, applicant id, and external id.
     if (proposals !== undefined && proposals.length > 0) {
       proposal = proposals.filter(
-        p => (p.opportunityId === form.opportunityId
-          && p.applicantId === finalApplicant.id)
-          && p.externalId === proposalExternalId
+        p => (p.opportunityId == form.opportunityId
+          && p.applicantId == finalApplicant.id)
+          && p.externalId == proposalExternalId
       )[0];
     }
 
     // If the proposal did not exist, create it.
     if (proposal === undefined) {
+      console.log(`No existing proposal for opportunityId=${form.opportunityId}, applicantId=${finalApplicant.id}, and externalId=${proposalExternalId}`);
       proposal = (
         await axios.post(
           `${apiUrl}/proposals`,
           {
-            applicantId: applicant.id,
+            applicantId: finalApplicant.id,
             opportunityId: form.opportunityId,
             externalId: proposalExternalId,
           },
@@ -197,6 +226,8 @@ try {
           },
         )
       ).data;
+    } else {
+      console.log(`Found existing proposal with id=${proposal.id} for opportunityId=${form.opportunityId}, applicantId=${finalApplicant.id}, and externalId=${proposalExternalId}`);
     }
 
     if (proposal === undefined) {
@@ -213,12 +244,13 @@ try {
       applicationFormId,
       fieldValues: [],
     }
-  
+
     for (let key in row) {
       // Where the CSV header name matches the label in the application field form, add a value.
       const formFields: ApplicationFormField[] = form.fields.filter(field => field.label === key);
-      if (formFields.length === 1) {
-        const formField = formFields[0];
+      // We can replicate the same application form field to multiple canonical fields.
+      // The specific use case is "Organization Legal Name" to "Organization Name".
+      for (let formField of formFields) {
         const fieldValue = row[key];
         if (formField !== undefined && fieldValue !== null && fieldValue !== '') {
           const proposalValue: ProposalFieldValue = {
@@ -231,8 +263,8 @@ try {
           console.log(`Field value for '${key}' for proposal '${finalProposal.id}' was null or empty: skipped.`);
         }
       }
-      else {
-        console.log(`Failed to find exactly one field label matching '${key}' in row ${row}, got ${formFields.length}`);
+      if (formFields.length === 0) {
+        console.log(`Failed to find any field label matching '${key}' in row ${row}, got ${formFields.length}`);
       }
     }
 
@@ -261,10 +293,5 @@ try {
 
   console.log('Finished waiting for all the POSTs');
 } catch (error: unknown) {
-  if (error instanceof AxiosError) {
-    console.log(error.response?.data)
-  }
-  else {
-    console.log(error);
-  }
+  console.log(error);
 }
