@@ -1,4 +1,4 @@
-// Takes a comma-separated values file and creates a canonical fields INSERT SQL file.
+// Takes a comma-separated values file and creates a base fields INSERT SQL file.
 import fs from 'fs';
 import os from 'os';
 import CsvReadableStream from 'csv-reader';
@@ -23,7 +23,7 @@ interface CsvRow {
 const csvInput = fs.createReadStream(args.inputFile, 'utf8');
 const sqlOutput = fs.createWriteStream(args.outputFile, 'utf8');
 
-sqlOutput.write(`INSERT INTO canonical_fields (label, short_code, data_type) VALUES${os.EOL}`);
+sqlOutput.write(`INSERT INTO base_fields (label, short_code, data_type) VALUES${os.EOL}`);
 
 let firstRowArrived = false;
 csvInput.pipe(
