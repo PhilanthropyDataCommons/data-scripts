@@ -14,6 +14,12 @@ const args = parse<Args>({
   outputFile: String,
 });
 
+interface CsvRow {
+  Label: string,
+  'Internal field name' : string,
+  Type: string
+}
+
 const csvInput = fs.createReadStream(args.inputFile, 'utf8');
 const sqlOutput = fs.createWriteStream(args.outputFile, 'utf8');
 
@@ -28,15 +34,14 @@ csvInput.pipe(
     allowQuotes: true,
     asObject: true,
   }),
-).on('data', (row: any) => {
-  const label = row['Label'];
+).on('data', (row: CsvRow) => {
+  const label = row.Label;
   const shortCode = row['Internal field name'];
-  const dataType = row['Type'];
+  const dataType = row.Type;
 
   if (firstRowArrived) {
     sqlOutput.write(`,${os.EOL}('${label}', '${shortCode}', '${dataType}' )`);
-  }
-  else {
+  } else {
     sqlOutput.write(`('${label}', '${shortCode}', '${dataType}' )`);
   }
   firstRowArrived = true;
