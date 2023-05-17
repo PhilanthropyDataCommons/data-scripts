@@ -2,14 +2,14 @@
   "name": "data-scripts",
   "version": "1.0.0",
   "description": "",
-  "main": "dist/generateCanonicalFieldsInserts.js",
+  "main": "dist/generateBaseFieldsInserts.js",
   "scripts": {
     "build": "npm run cleanup && npm run build:node",
     "build:node": "tsc -p tsconfig.json",
     "cleanup": "rimraf dist",
     "lint": "eslint ./src --ext .ts",
     "test": "echo \"no tests\" && exit 1",
-    "generateCanonicalFieldsInserts": "node dist/generateCanonicalFieldsInserts.js",
+    "generateBaseFieldsInserts": "node dist/generateBaseFieldsInserts.js",
     "generateApplicationFormJson": "node dist/generateApplicationFormJson.js"
   },
   "author": "",
