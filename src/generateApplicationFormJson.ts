@@ -3,7 +3,7 @@ import fs from 'fs';
 import CsvReadableStream from 'csv-reader';
 import { parse } from 'ts-command-line-args';
 import  axios  from 'axios'
-import { AxiosError } from 'axios';
+
 interface Args {
   inputFile: string;
   outputFile: string;
@@ -17,7 +17,7 @@ interface csvRow {
   [key: string]: any;
 }
 interface ApplicationFormField {
-  canonicalFieldId: number;
+  baseFieldId: number;
   position: number;
   label: string;
 }
@@ -53,15 +53,15 @@ let applicationForm: ApplicationForm = {
 }
 let counter = 0;
 
-console.log('about to get canonical fields');
-axios(apiUrl+'/canonicalFields',{
+console.log('about to get base fields');
+axios(apiUrl+'/baseFields',{
   'method': 'GET',
   'headers' : {
     'accept': 'application/json',
     'Authorization': 'Bearer ' + bearerToken
   }
 }).then((response) => {
-  console.log('I have canonical fields, about to process them');
+  console.log('I have base fields, about to process them');
   let fields: BaseField[] = response.data;
   csvInput.pipe(
     new CsvReadableStream({
@@ -86,7 +86,7 @@ axios(apiUrl+'/canonicalFields',{
         throw new Error(`Found ${fieldsFiltered.length} base fields (expected 1): shortCode=${shortCode}`);
       }
       const applicationFormField: ApplicationFormField = {
-        canonicalFieldId: field.id,
+        baseFieldId: field.id,
         position: row[pos] === '' ? counter++ : row[pos],
         label: row[label],
       }
