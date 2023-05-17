@@ -1,4 +1,6 @@
-// Takes a comma-separated values file and creates a base fields INSERT SQL file.
+// Takes a comma-separated values (CSV) file and creates a canonical fields INSERT SQL file.
+// The CSV is usually derived from the following URL using xlsx export and `xslx2csv`:
+// https://docs.google.com/spreadsheets/d/1Ep3_MEIyIbhxJ5TpH5x4Q1fRZqr1CFHXZ_uv3fEOSEk
 import fs from 'fs';
 import os from 'os';
 import CsvReadableStream from 'csv-reader';
