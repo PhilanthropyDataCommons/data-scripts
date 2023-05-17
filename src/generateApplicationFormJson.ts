@@ -15,7 +15,7 @@ interface Args {
 
 type CsvRow = Record<string, string>;
 interface ApplicationFormField {
-  canonicalFieldId: number;
+  baseFieldId: number;
   position: number | string | undefined;
   label: string | undefined;
 }
@@ -24,7 +24,7 @@ interface ApplicationForm {
   fields: ApplicationFormField[];
 }
 
-interface CanonicalField {
+interface BaseField {
   id: number;
   label: string;
   shortCode: string;
@@ -53,14 +53,14 @@ const applicationForm: ApplicationForm = {
 };
 let counter = 0;
 
-axios(`${apiUrl}/canonicalFields`, {
+axios(`${apiUrl}/baseFields`, {
   method: 'GET',
   headers: {
     accept: 'application/json',
     Authorization: `Bearer ${bearerToken}`,
   },
 }).then((response) => {
-  const fields: CanonicalField[] = response.data as CanonicalField[];
+  const fields: BaseField[] = response.data as BaseField[];
   csvInput.pipe(
     new CsvReadableStream({
       parseNumbers: true,
@@ -73,13 +73,13 @@ axios(`${apiUrl}/canonicalFields`, {
     const label = `${funder}: field label`;
     const id = `${funder}: external ID`;
     const pos = `${funder}: form position`;
-    let field: CanonicalField | undefined;
+    let field: BaseField | undefined;
     if (row[id] !== '') {
       const shortCode = row['Internal field name'];
       field = fields.find((e) => e.shortCode === shortCode);
       if (field) {
         const applicationFormField: ApplicationFormField = {
-          canonicalFieldId: field.id,
+          baseFieldId: field.id,
           position: row[pos] ? '' : (counter += 1),
           label: row[label],
         };
