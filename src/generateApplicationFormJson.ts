@@ -5,6 +5,7 @@ import fs from 'fs';
 import CsvReadableStream from 'csv-reader';
 import { parse } from 'ts-command-line-args';
 import axios, { AxiosError } from 'axios';
+import { logger } from './logger';
 
 interface Args {
   inputFile: string;
@@ -93,6 +94,5 @@ axios(`${apiUrl}/baseFields`, {
     jsonOutput.close();
   });
 }).catch((error: AxiosError) => {
-  // eslint-disable-next-line no-console
-  console.log(error.response?.data);
+  logger.error({ error }, 'Error getting base fields');
 });
