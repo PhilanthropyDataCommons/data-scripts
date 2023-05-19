@@ -4,7 +4,7 @@
   "description": "",
   "main": "dist/generateBaseFieldsInserts.js",
   "scripts": {
-    "lint": "eslint ./src --ext .ts",
+    "lint": "eslint ./src --ext .ts --max-warnings=0",
     "test": "echo \"no tests\" && exit 1",
     "generateBaseFieldsInserts": "ts-node src/generateBaseFieldsInserts",
     "generateApplicationFormJson": "ts-node src/generateApplicationFormJson"
