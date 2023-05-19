@@ -4,13 +4,10 @@
   "description": "",
   "main": "dist/generateBaseFieldsInserts.js",
   "scripts": {
-    "build": "npm run cleanup && npm run build:node",
-    "build:node": "tsc -p tsconfig.json",
-    "cleanup": "rimraf dist",
     "lint": "eslint ./src --ext .ts",
     "test": "echo \"no tests\" && exit 1",
-    "generateBaseFieldsInserts": "node dist/generateBaseFieldsInserts.js",
-    "generateApplicationFormJson": "node dist/generateApplicationFormJson.js"
+    "generateBaseFieldsInserts": "ts-node src/generateBaseFieldsInserts",
+    "generateApplicationFormJson": "ts-node src/generateApplicationFormJson"
   },
   "author": "",
   "license": "AGPL-3.0-or-later",
@@ -24,6 +21,7 @@
     "eslint-config-airbnb-typescript": "^17.0.0",
     "eslint-plugin-import": "^2.27.5",
     "eslint-plugin-sort-exports": "^0.8.0",
+    "ts-node": "^10.9.1",
     "typescript": "^5.0.4"
   },
   "dependencies": {

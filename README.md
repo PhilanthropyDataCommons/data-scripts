@@ -8,11 +8,7 @@ Each script should have a corresponding `npm` command. To list scripts, use `npm
 
 ## To run a script
 
-First, build the scripts:
-
-`npm run build`
-
-Second, run a script with a `--` between the name and its arguments:
+Run a script with a `--` between the name and its arguments:
 
 `npm run [script name] -- --[parameter name]=[arg]`
 

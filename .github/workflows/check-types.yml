@@ -1,9 +1,9 @@
-name: Build
+name: Check Types
 on:
   pull_request:
   push:
 jobs:
-  run_tests:
+  check_types:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
@@ -12,5 +12,5 @@ jobs:
           node-version-file: ".node-version"
       - name: Install dependencies
         run: npm ci
-      - name: Build
-        run: npm run build
+      - name: Check types
+        run: tsc -p tsconfig.json
