@@ -2,6 +2,7 @@ import { config } from 'dotenv';
 import yargs from 'yargs/yargs';
 import { hideBin } from 'yargs/helpers';
 import { logger } from './logger';
+import { getTokenCommand } from './oidc';
 
 config();
 
@@ -24,6 +25,7 @@ const main = async (argv: string[]) => yargs(hideBin(argv))
     {},
     () => { throw new Error('Example error message'); },
   )
+  .command(getTokenCommand)
   .demandCommand()
   .parse();
 

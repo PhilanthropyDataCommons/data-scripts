@@ -1,3 +1,5 @@
 {
-  "example-argument": "example-value"
+  "oidc-base-url": "https://auth.philanthropydatacommons.org/realms/pdc",
+  "oidc-client-id": "my-client-id",
+  "oidc-client-secret": "my-client-secret"
 }
