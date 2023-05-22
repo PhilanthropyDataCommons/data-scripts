@@ -93,5 +93,6 @@ axios(`${apiUrl}/baseFields`, {
     jsonOutput.close();
   });
 }).catch((error: AxiosError) => {
+  // eslint-disable-next-line no-console
   console.log(error.response?.data);
 });
