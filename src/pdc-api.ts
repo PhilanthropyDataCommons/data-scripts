@@ -24,6 +24,54 @@ const callPdcApi = async <T>(
   return response.data;
 };
 
+interface ApiBaseField {
+  id: number;
+  label: string;
+  shortCode: string;
+}
+
+const getBaseFields = (baseUrl: string, token: AccessTokenSet) => (
+  callPdcApi<ApiBaseField[]>(
+    baseUrl,
+    '/baseFields',
+    {},
+    token,
+    'get',
+  )
+);
+
+interface ApiProposal {
+  id: number;
+  versions: {
+    version: number;
+    fieldValues: {
+      applicationFormField: {
+        baseFieldId: number;
+        position: number;
+      };
+      value: string;
+    }[];
+  }[];
+}
+
+interface ApiProposals {
+  entries: ApiProposal[];
+  total: number;
+}
+
+const getProposals = (baseUrl: string, token: AccessTokenSet) => (
+  callPdcApi<ApiProposals>(
+    baseUrl,
+    '/proposals',
+    {
+      _page: '1',
+      _count: '1000',
+    },
+    token,
+    'get',
+  )
+);
+
 const postPlatformProviderData = (
   baseUrl: string,
   token: AccessTokenSet,
@@ -46,5 +94,7 @@ const postPlatformProviderData = (
 );
 
 export {
+  getBaseFields,
+  getProposals,
   postPlatformProviderData,
 };

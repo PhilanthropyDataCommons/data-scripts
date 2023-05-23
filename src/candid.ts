@@ -2,8 +2,9 @@ import { writeFile } from 'fs/promises';
 import { client } from './client';
 import { logger } from './logger';
 import { getToken, oidcOptions } from './oidc';
-import { postPlatformProviderData } from './pdc-api';
+import { getBaseFields, getProposals, postPlatformProviderData } from './pdc-api';
 import type { CommandModule } from 'yargs';
+import type { AccessTokenSet } from './oidc';
 
 interface CandidPremierResult {
   code: number;
@@ -118,12 +119,112 @@ const updateCommand: CommandModule = {
   },
 };
 
+const getEinBaseFieldId = async (
+  baseUrl: string,
+  token: AccessTokenSet,
+) => {
+  const baseFields = await getBaseFields(baseUrl, token);
+  const einBaseField = baseFields.find(({ shortCode }) => (
+    shortCode === 'organization_tax_id'
+  ));
+  if (einBaseField === undefined) {
+    throw new Error('Could not find base field with short code `organization_tax_id`');
+  }
+  return einBaseField.id;
+};
+
+const getEinsFromPdc = async (baseUrl: string, token: AccessTokenSet) => {
+  const einBaseFieldId = await getEinBaseFieldId(baseUrl, token);
+  const proposals = await getProposals(baseUrl, token);
+
+  const eins = new Set(proposals.entries
+    .flatMap((proposal) => proposal.versions[0]?.fieldValues)
+    .filter(<T>(x: T | undefined): x is T => typeof x !== 'undefined')
+    .filter(({ applicationFormField }) => applicationFormField.baseFieldId === einBaseFieldId)
+    .map(({ value }) => value)
+    .filter(isValidEin));
+  return [...eins];
+};
+
+interface UpdateAllCommandArgs {
+  'candid-api-key': string;
+  'oidc-base-url': string,
+  'oidc-client-id': string,
+  'oidc-client-secret': string,
+  'pdc-api-base-url': string;
+}
+
+const updateAllCommand: CommandModule<unknown, UpdateAllCommandArgs> = {
+  command: 'update-all',
+  describe: 'Update Candid profiles for all PDC proposals',
+  builder: {
+    ...oidcOptions,
+    'candid-api-key': {
+      describe: 'Candid Premier API key; get from account management at https://dashboard.candid.org/',
+      demandOption: true,
+      type: 'string',
+    },
+    'pdc-api-base-url': {
+      describe: 'Location of PDC API',
+      demandOption: true,
+      type: 'string',
+    },
+  },
+  handler: async (args) => {
+    const token = await getToken(
+      args.oidcBaseUrl,
+      args.oidcClientId,
+      args.oidcClientSecret,
+    );
+    const eins = await getEinsFromPdc(args.pdcApiBaseUrl, token);
+    logger.info(`Found ${eins.length} valid EINs to look up in Candid`);
+
+    for (let i = 0; i < eins.length; i += 1) {
+      /* eslint-disable no-await-in-loop -- Respect Candid's rate limit
+       *
+       * Note that this use case is specifically called out in the ESLint rule
+       * documentation:
+       *
+       *     loops may be used to prevent your code from sending an excessive
+       *     amount of requests in parallel. In such cases it makes sense to
+       *     use await within a loop and it is recommended to disable the rule
+       *     via a standard ESLint disable comment.
+       *
+       * https://eslint.org/docs/latest/rules/no-await-in-loop
+       */
+      const ein = eins[i];
+      if (typeof ein !== 'string') {
+        break;
+      }
+      try {
+        const { data } = await getCandidProfile(args.candidApiKey, ein);
+        await postPlatformProviderData(
+          args.pdcApiBaseUrl,
+          token,
+          ein,
+          'candid',
+          data,
+        );
+        logger.debug(`[${i + 1}/${eins.length}] Wrote data for ${ein} to PDC`);
+      } catch (error: unknown) {
+        logger.error({ error }, `Error loading data for ${ein}`);
+      }
+
+      // Our Candid API subscription has a rate limit of 10 calls per
+      // minute. Rather than implement 429 request failure handling and
+      // exponential backoff, just sleep 6 seconds after each call.
+      await new Promise((r) => { setTimeout(r, 6000); });
+    }
+  },
+};
+
 const candid: CommandModule = {
   command: 'candid',
   describe: 'Interact with the Candid Premier API',
   builder: (y) => (y
     .command(lookupCommand)
     .command(updateCommand)
+    .command(updateAllCommand)
     .demandCommand()
   ),
   handler: () => {},
