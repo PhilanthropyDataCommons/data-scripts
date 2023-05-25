@@ -1,6 +1,8 @@
 import { writeFile } from 'fs/promises';
 import { client } from './client';
 import { logger } from './logger';
+import { getToken, oidcOptions } from './oidc';
+import { postPlatformProviderData } from './pdc-api';
 import type { CommandModule } from 'yargs';
 
 interface CandidPremierResult {
@@ -73,11 +75,55 @@ const lookupCommand: CommandModule<unknown, LookupCommandArgs> = {
   },
 };
 
+const updateCommand: CommandModule = {
+  command: 'update <ein>',
+  describe: 'Fetch information about an organization by its EIN, and upload to the PDC',
+  builder: (y) => (y
+    .option('candid-api-key', {
+      describe: 'Candid Premier API key; get from account management at https://dashboard.candid.org/',
+      demandOption: true,
+      type: 'string',
+    })
+    .options(oidcOptions)
+    .option('pdc-api-base-url', {
+      describe: 'Location of PDC API',
+      demandOption: true,
+      type: 'string',
+    })
+    .positional('ein', {
+      describe: 'US tax ID of organization to look up',
+      demandOption: true,
+      type: 'string',
+    })
+    .check(({ ein }) => isValidEin(ein))
+  ),
+  handler: async (args) => {
+    const token = await getToken(
+      args.oidcBaseUrl as string,
+      args.oidcClientId as string,
+      args.oidcClientSecret as string,
+    );
+    const data = await getCandidProfile(
+      args.candidApiKey as string,
+      args.ein as string,
+    );
+    await postPlatformProviderData(
+      args.pdcApiBaseUrl as string,
+      token,
+      args.ein as string,
+      'candid',
+      data,
+    );
+    logger.info(`Wrote data for ${args.ein as string} to PDC`);
+  },
+};
+
 const candid: CommandModule = {
   command: 'candid',
   describe: 'Interact with the Candid Premier API',
   builder: (y) => (y
     .command(lookupCommand)
+    .command(updateCommand)
     .demandCommand()
   ),
   handler: () => {},

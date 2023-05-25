@@ -4,7 +4,7 @@ import jwtDecode, { JwtPayload } from 'jwt-decode';
 import { logger } from './logger';
 import type { CommandModule, Options } from 'yargs';
 
-interface AccessTokenSet extends TokenSet {
+export interface AccessTokenSet extends TokenSet {
   access_token: string;
 }
 
