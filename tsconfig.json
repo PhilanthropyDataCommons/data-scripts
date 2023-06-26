@@ -6,6 +6,6 @@
     "noUncheckedIndexedAccess": true,
   },
   "include": [
-    "src"
+    "src",
   ]
 }
