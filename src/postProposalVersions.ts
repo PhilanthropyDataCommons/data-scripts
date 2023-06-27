@@ -1,10 +1,11 @@
 // Takes a CSV file, creates JSON bodies for POST /proposalVersions, posts them.
 import { readFileSync } from 'fs';
-import { AssertionError } from 'assert';
 import { parse as csvParse } from 'csv-parse/sync';
 import { parse as argParse } from 'ts-command-line-args';
 import axios, { AxiosError } from 'axios';
+import { assertIsCsvRow } from './csv';
 import { logger } from './logger';
+import type { CsvRow } from './csv';
 
 interface Args {
   inputFile: string;
@@ -13,18 +14,6 @@ interface Args {
   proposalExternalIdColumnName: string;
   bearerToken: string;
   apiUrl: string;
-}
-
-type CsvRow = Record<string, string>;
-
-function assertIsCsvRow(row: unknown): asserts row is CsvRow {
-  if (row === null
-    || typeof row !== 'object'
-    || Object.keys(row).length === 0
-    || Object.keys(row).some((key) => typeof key !== 'string')
-    || Object.values(row).some((value) => typeof value !== 'string')) {
-    throw new AssertionError({ message: 'Given row is not a CsvRow!' });
-  }
 }
 
 interface Applicant {
