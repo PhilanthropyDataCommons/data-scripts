@@ -1,7 +1,10 @@
 // Takes a comma-separated values (CSV) file and creates a JSON body for POST /applicationForms.
 // The CSV is usually derived from the following URL using xlsx export and `xslx2csv`:
 // https://docs.google.com/spreadsheets/d/1Ep3_MEIyIbhxJ5TpH5x4Q1fRZqr1CFHXZ_uv3fEOSEk
-import fs from 'fs';
+import {
+  createReadStream,
+  createWriteStream,
+} from 'fs';
 import CsvReadableStream from 'csv-reader';
 import { parse } from 'ts-command-line-args';
 import axios, { AxiosError } from 'axios';
@@ -44,8 +47,8 @@ const args = parse<Args>({
   apiUrl: String,
 });
 
-const csvInput = fs.createReadStream(args.inputFile, 'utf8');
-const jsonOutput = fs.createWriteStream(args.outputFile, 'utf8');
+const csvInput = createReadStream(args.inputFile, 'utf8');
+const jsonOutput = createWriteStream(args.outputFile, 'utf8');
 const {
   opportunityId, funder, bearerToken, apiUrl,
 } = args;
