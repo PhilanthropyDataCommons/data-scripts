@@ -1,6 +1,7 @@
 import { config } from 'dotenv';
 import yargs from 'yargs/yargs';
 import { hideBin } from 'yargs/helpers';
+import { candid } from './candid';
 import { logger } from './logger';
 import { getTokenCommand } from './oidc';
 
@@ -13,6 +14,9 @@ const main = async (argv: string[]) => yargs(hideBin(argv))
   .strictCommands(true)
   .env('DS')
   .config('config')
+  .fail((msg, err, y) => {
+    logger.fatal({ m: msg, err, yargs: y }, 'Error encountered');
+  })
   .command(
     ['show-args', 'args'],
     'Show the options that have been parsed from the environment, config files, and command line arguments',
@@ -23,9 +27,10 @@ const main = async (argv: string[]) => yargs(hideBin(argv))
     'error',
     'Throw an error to see how it is handled',
     {},
-    () => { throw new Error('Example error message'); },
+    async () => { throw new Error('Example error message'); },
   )
   .command(getTokenCommand)
+  .command(candid)
   .demandCommand()
   .parse();
 
