@@ -14,7 +14,7 @@
   "author": "",
   "license": "AGPL-3.0-or-later",
   "devDependencies": {
-    "@tsconfig/node18": "^18.2.1",
+    "@tsconfig/node18": "^18.2.2",
     "@types/node": "^18.17.14",
     "@types/yargs": "^17.0.24",
     "@typescript-eslint/eslint-plugin": "^5.60.0",
