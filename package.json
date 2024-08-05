@@ -32,7 +32,7 @@
     "csv-reader": "^1.0.12",
     "csv-parse": "^5.4.0",
     "dotenv": "^16.3.1",
-    "jwt-decode": "^3.1.2",
+    "jwt-decode": "^4.0.0",
     "openid-client": "^5.6.5",
     "pino": "^8.16.2",
     "pino-pretty": "^10.2.0",
