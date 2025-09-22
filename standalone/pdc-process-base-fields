@@ -1,0 +1,133 @@
+#!/usr/bin/env python3
+
+# Copyright (C) PhilanthropyDataCommons.org
+# GNU Affero General Public License, Version 3 (AGPL-3.0)
+
+# We deliberately don't comply with the snake_case naming convention,
+# because this is primarily a standalone command-line program and we
+# want its name to be as easy to type as possible, and hyphens don't
+# require a shift modifier (on most keyboards) whereas underscores do.
+#
+# pylint: disable=C0103
+
+__doc__ = """Reformat PDC base fields for manipulation and presentation.
+
+Anyone can get PDC base fields as JSON via an unauthenticated request:
+
+  $ curl -X 'GET'                                        \\
+    'https://api.philanthropydatacommons.org/baseFields' \\
+    -H 'accept: application/json' 2>/dev/null
+
+Right now, this script just converts that JSON to CSV.  CSV is easier
+to work with for certain tasks (such as sorting the base fields by
+category), and is a good waystation for getting to other formats
+(e.g., HTML) via common tools.  In the future, this script might
+output other formats, e.g., Markdown or HTML, directly, if there's a
+need for that.
+
+Here is an example of typical usage:
+
+  (venv) $ curl -X 'GET'                                         \\
+            'https://api.philanthropydatacommons.org/baseFields' \\
+            -H 'accept: application/json' 2>/dev/null            \\
+           | ./pdc-process-base-fields | tee pdc-base-fields.csv
+
+For reference, below is one PDC base field with all the JSON
+components you might ever run into.  Note that it even includes a
+couple of localizations, though not all base fields are necessarily
+localized.  Any nested JSON structures (such as those used for
+localizations) are expanded out into self-explanatory columns, for
+example "localizations.en.label", "localizations.en.language", ...
+"localizations.zh.label", etc.  Any CSV reader who wants to ignore
+those columns can simply do so.
+
+  {
+    "label": "Organization Name",
+    "category": "organization",
+    "dataType": "string",
+    "createdAt": "2025-08-18T20:01:55.057921+00:00",
+    "shortCode": "organization_name",
+    "description": "",
+    "localizations": {
+      "en": {
+        "label": "Organization Name",
+        "language": "en",
+        "createdAt": "2025-08-18T20:01:55.973012+00:00",
+        "description": "",
+        "baseFieldShortCode": "organization_name"
+      },
+      "zh": {
+        "label": "组织名称",
+        "language": "zh",
+        "createdAt": "2025-08-18T20:01:55.973215+00:00",
+        "description": "组织的名称（参见「组织法定名称」）",
+        "baseFieldShortCode": "organization_name"
+      }
+    },
+    "valueRelevanceHours": null,
+    "sensitivityClassification": "restricted"
+  }
+"""
+
+import json
+import argparse
+import sys
+
+try:
+    import pandas
+except ImportError:
+    print("""ERROR: pandas Python module not found
+
+Please install the pandas module into your Python environment.
+
+One way is to install it system-wide, e.g., on Debian GNU/Linux:
+
+  $ sudo apt-get install python-pandas
+
+Or you can install it into a local virtual environment and run this
+script in that environment:
+
+  $ python -m venv venv
+  $ source ./venv/bin/activate
+  (venv) $ pip3 install pandas
+  (venv) $ ./pdc-process-base-fields --help  # this should work now
+""")
+    sys.exit(1)
+
+
+def main():
+    """Entry point for this command-line program.
+    For now, everything happens in this function.  If this program
+    gets more complex, then we may organize it differently."""
+    arg_parser = argparse.ArgumentParser(
+        prog="pdc-process-base-fields",
+        description=__doc__,
+        # https://docs.python.org/3/library/argparse.html#formatter-class
+        # says more about this next argument.  Another possible value
+        # here would be RawDescriptionHelpFormatter -- I don't usually
+        # use that because it can do some minor reformatting that I
+        # find aesthetically displeasing, but hey, YMMV.
+        formatter_class=argparse.RawTextHelpFormatter)
+    allowed_formats = ["csv",]  # maybe also "markdown", "html", etc some day
+    arg_parser.add_argument(
+        '--output-format',
+        choices=allowed_formats,
+        type=str.lower,
+        default="csv",
+        help="Output format to show base fields in.  Default: 'csv'")
+
+    # Parse command line.
+    args = arg_parser.parse_args()
+
+    if args.output_format == "csv":
+        json_input = json.load(sys.stdin)
+        parsed_input = pandas.json_normalize(json_input)
+        # Switch to index=True to include a first column that shows DataFrame index
+        parsed_input.to_csv(sys.stdout, index=False, encoding='utf-8')
+    else:  # can't happen
+        raise ValueError(
+            f"ERROR: Unknown output format 'f{args.output_format}' requested")
+
+
+if __name__ == '__main__':
+    main()
