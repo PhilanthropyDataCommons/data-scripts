@@ -1,6 +1,13 @@
 # data-scripts
 
-Command-line scripts to add data to a PDC service instance.
+Most of the scripts here are command-line scripts to add data to a PDC
+service instance.  Those live in `src/` and are written in TypeScript
+unless otherwise noted.
+
+There is also a Python script for processing the PDC base fields.
+Right now, that script lives, somewhat arbitrarily, in `standalone/`.
+This way of organizing things is not necessarily permanent; as we add
+more scripts, we can rearrange however makes sense.
 
 ## Separate scripts
 
