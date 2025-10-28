@@ -28,7 +28,7 @@
     "typescript": "^5.1.6"
   },
   "dependencies": {
-    "axios": "^1.4.0",
+    "axios": "^1.13.0",
     "csv-reader": "^1.0.12",
     "csv-parse": "^5.5.6",
     "dotenv": "^16.3.1",
