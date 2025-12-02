@@ -14,7 +14,6 @@
   "author": "",
   "license": "AGPL-3.0-or-later",
   "devDependencies": {
-    "@tsconfig/node18": "^18.2.4",
     "@types/node": "^24.10.1",
     "@types/yargs": "^17.0.32",
     "@typescript-eslint/eslint-plugin": "^5.62.0",
@@ -28,6 +27,7 @@
     "typescript": "^5.9.3"
   },
   "dependencies": {
+    "@tsconfig/node24": "^24.0.3",
     "axios": "^1.13.1",
     "csv-parse": "^5.5.6",
     "dotenv": "^16.3.1",
