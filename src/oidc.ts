@@ -1,6 +1,6 @@
 import { writeFile } from 'fs/promises';
 import { Issuer, TokenSet } from 'openid-client';
-import jwtDecode, { JwtPayload } from 'jwt-decode';
+import { jwtDecode } from 'jwt-decode';
 import { logger } from './logger';
 import type { CommandModule, Options } from 'yargs';
 
@@ -32,7 +32,7 @@ const getToken = async (
     throw new Error('Token set does not include an access token');
   }
 
-  const { jti } = jwtDecode<JwtPayload>(token.access_token);
+  const { jti } = jwtDecode(token.access_token);
   if (jti) {
     logger.debug(`Retrieved token with id ${jti}`);
   } else {
