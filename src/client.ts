@@ -8,7 +8,7 @@ const logRequest = (config: InternalAxiosRequestConfig) => {
   if (method && url) {
     clientLogger.debug(`${method} ${url}`);
   } else {
-    clientLogger.debug('Request', { config });
+    clientLogger.debug({ config }, 'Request');
   }
   return config;
 };
@@ -18,7 +18,7 @@ const logResponse = (response: AxiosResponse) => {
   if (method && url) {
     clientLogger.debug(`${method} ${url} => ${status} ${statusText}`);
   } else {
-    clientLogger.debug(`${status} ${statusText}`, { config: response.config });
+    clientLogger.debug({ config: response.config }, `${status} ${statusText}`);
   }
   return response;
 };
