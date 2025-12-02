@@ -31,7 +31,7 @@
     "axios": "^1.13.1",
     "csv-parse": "^5.5.6",
     "dotenv": "^16.3.1",
-    "jwt-decode": "^3.1.2",
+    "jwt-decode": "^4.0.0",
     "openid-client": "^5.6.5",
     "pino": "^8.16.2",
     "pino-pretty": "^13.1.2",
