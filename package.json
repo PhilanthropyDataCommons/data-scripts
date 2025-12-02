@@ -32,7 +32,7 @@
     "csv-parse": "^5.5.6",
     "dotenv": "^16.3.1",
     "jwt-decode": "^4.0.0",
-    "openid-client": "^5.6.5",
+    "openid-client": "^6.8.1",
     "pino": "^10.1.0",
     "pino-pretty": "^13.1.2",
     "ts-command-line-args": "^2.5.1",
