@@ -1,5 +1,6 @@
 import { writeFile } from 'fs/promises';
 import { client } from './client';
+import { isValidEin } from './ein';
 import { logger } from './logger';
 import { getToken, oidcOptions } from './oidc';
 import { getBaseFields, getProposals, postPlatformProviderData } from './pdc-api';
@@ -28,10 +29,6 @@ const getCandidProfile = async (
   logger.debug(`Fetched Candid data for ${ein}: ${data.message}`);
   return data;
 };
-
-const isValidEin = (s: string): boolean => (
-  /^\d{2}-?\d{7}$/.test(s)
-);
 
 interface LookupCommandArgs {
   'candid-api-key': string;
