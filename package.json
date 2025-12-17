@@ -9,9 +9,10 @@
     "start": "ts-node src/index",
     "generateBaseFieldsInserts": "ts-node src/generateBaseFieldsInserts",
     "generateApplicationFormJson": "ts-node src/generateApplicationFormJson",
-    "postProposalVersions": "ts-node src/postProposalVersions"
+    "postProposalVersions": "ts-node src/postProposalVersions",
+    "charityNavigator": "ts-node src/charityNavigator"
   },
-  "author": "",
+  "author": "Open Tech Strategies",
   "license": "AGPL-3.0-or-later",
   "devDependencies": {
     "@types/node": "^24.10.1",
