@@ -3,7 +3,7 @@ import { client } from './client';
 import { isValidEin } from './ein';
 import { logger } from './logger';
 import { getToken, oidcOptions } from './oidc';
-import { getBaseFields, getProposals, postPlatformProviderData } from './pdc-api';
+import { getProposals, postPlatformProviderData } from './pdc-api';
 import type { CommandModule } from 'yargs';
 import type { AccessTokenSet } from './oidc';
 
@@ -116,28 +116,13 @@ const updateCommand: CommandModule = {
   },
 };
 
-const getEinBaseFieldId = async (
-  baseUrl: string,
-  token: AccessTokenSet,
-) => {
-  const baseFields = await getBaseFields(baseUrl, token);
-  const einBaseField = baseFields.find(({ shortCode }) => (
-    shortCode === 'organization_tax_id'
-  ));
-  if (einBaseField === undefined) {
-    throw new Error('Could not find base field with short code `organization_tax_id`');
-  }
-  return einBaseField.id;
-};
-
 const getEinsFromPdc = async (baseUrl: string, token: AccessTokenSet) => {
-  const einBaseFieldId = await getEinBaseFieldId(baseUrl, token);
   const proposals = await getProposals(baseUrl, token);
 
   const eins = new Set(proposals.entries
     .flatMap((proposal) => proposal.versions[0]?.fieldValues)
     .filter(<T>(x: T | undefined): x is T => typeof x !== 'undefined')
-    .filter(({ applicationFormField }) => applicationFormField.baseFieldId === einBaseFieldId)
+    .filter(({ applicationFormField }) => applicationFormField.baseFieldShortCode === 'organization_tax_id')
     .map(({ value }) => value)
     .filter(isValidEin));
   return [...eins];

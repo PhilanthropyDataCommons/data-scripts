@@ -1,5 +1,6 @@
 import { client } from './client';
 import type { AccessTokenSet } from './oidc';
+import type { BaseField, ProposalBundle } from '@pdc/sdk';
 
 const callPdcApi = async <T>(
   baseUrl: string,
@@ -24,14 +25,8 @@ const callPdcApi = async <T>(
   return response.data;
 };
 
-interface ApiBaseField {
-  id: number;
-  label: string;
-  shortCode: string;
-}
-
 const getBaseFields = (baseUrl: string, token: AccessTokenSet) => (
-  callPdcApi<ApiBaseField[]>(
+  callPdcApi<BaseField[]>(
     baseUrl,
     '/baseFields',
     {},
@@ -40,27 +35,8 @@ const getBaseFields = (baseUrl: string, token: AccessTokenSet) => (
   )
 );
 
-interface ApiProposal {
-  id: number;
-  versions: {
-    version: number;
-    fieldValues: {
-      applicationFormField: {
-        baseFieldId: number;
-        position: number;
-      };
-      value: string;
-    }[];
-  }[];
-}
-
-interface ApiProposals {
-  entries: ApiProposal[];
-  total: number;
-}
-
 const getProposals = (baseUrl: string, token: AccessTokenSet) => (
-  callPdcApi<ApiProposals>(
+  callPdcApi<ProposalBundle>(
     baseUrl,
     '/proposals',
     {
