@@ -1,0 +1,8 @@
+.DS_Store
+
+# MLFlow
+mlruns/
+mlflow.db
+
+data/*
+!data/optimized_rag.json
