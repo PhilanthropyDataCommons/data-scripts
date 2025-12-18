@@ -17,6 +17,14 @@ const queryNonprofitsPublic = gql`
         edges {
           ein
           name
+          updatedAt
+          website
+          phone
+          mission
+          encompassRatingId
+          encompassScore
+          encompassStarRating
+          encompassPublicationDate
         }
         pageInfo {
           totalPages
@@ -78,8 +86,8 @@ interface LookupCommandArgs {
 }
 
 const lookupCommand: CommandModule<unknown, LookupCommandArgs> = {
-  command: 'lookup <ein>',
-  describe: 'Fetch and display information about an organization by its EIN',
+  command: 'lookup',
+  describe: 'Fetch and display information about organizations by EIN',
   builder: (y) => (y
     .option('charity-navigator-api-key', {
       describe: 'CharityNavigator API key; get from account management at https://developer.charitynavigator.org/',
@@ -124,7 +132,7 @@ const charityNavigator: CommandModule = {
   describe: 'Interact with the CharityNavigator Premier API',
   builder: (y) => (y
     .command(lookupCommand)
-    .demandCommand()
+    .demandCommand(2)
   ),
   handler: () => {},
 };
