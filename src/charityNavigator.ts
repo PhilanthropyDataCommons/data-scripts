@@ -37,10 +37,14 @@ const queryNonprofitsPublic = gql`
 
 function apolloInit(apiUrl: string, apiKey: string) {
   const cache = new InMemoryCache();
-  const authLink = new SetContextLink(({ headers }) => ({
+  const authLink = new SetContextLink((prevContext) => ({
+    /* eslint-disable-next-line @typescript-eslint/no-unsafe-assignment --
+    Here is the transitive upstream type definition for prevContext:
+    export interface DefaultContext extends Record<string, any> {...}
+    Therefore apollo defines an `any` type on `headers` through no fault of our own. */
     headers: {
-      ...headers,
-      Authorization: apiKey,
+      ...prevContext.headers,
+      Authorization: `Bearer ${apiKey}`,
     },
   }));
 
