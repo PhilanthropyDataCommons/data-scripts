@@ -4,6 +4,8 @@ import { SetContextLink } from '@apollo/client/link/context';
 import { HttpLink } from '@apollo/client/link/http';
 import { isValidEin } from './ein';
 import { logger } from './logger';
+import { oidcOptions } from './oidc';
+import { getChangemakers } from './pdc-api';
 import type { CommandModule } from 'yargs';
 
 const queryNonprofitsPublic = gql`
@@ -64,7 +66,7 @@ const getCharityNavigatorProfiles = async (
   apiKey: string,
   eins: string[],
 ): Promise<ApolloClient.QueryResult> => {
-  logger.debug(`Looking up EINs ${JSON.stringify(eins)} in Charity Navigator GraphQL API`);
+  logger.info(`Looking up EINs ${JSON.stringify(eins)} in Charity Navigator GraphQL API`);
   const apollo = apolloInit(API_URL, apiKey);
   const variables = {
     filter: {
@@ -75,7 +77,7 @@ const getCharityNavigatorProfiles = async (
     page: 1,
     resultSize: eins.length,
   };
-  logger.debug(`Fetching charity navigator data for ${JSON.stringify(eins)} using vars ${JSON.stringify(variables)}`);
+  logger.info(`Fetching charity navigator data for ${JSON.stringify(eins)} using vars ${JSON.stringify(variables)}`);
   return apollo
     .query({
       query: queryNonprofitsPublic,
@@ -87,6 +89,14 @@ interface LookupCommandArgs {
   'charity-navigator-api-key': string;
   eins: string[];
   outputFile?: string;
+}
+
+interface UpdateAllCommandArgs {
+  'charity-navigator-api-key': string;
+  'oidc-base-url': string,
+  'oidc-client-id': string,
+  'oidc-client-secret': string,
+  'pdc-api-base-url': string;
 }
 
 const lookupCommand: CommandModule<unknown, LookupCommandArgs> = {
@@ -131,12 +141,49 @@ const lookupCommand: CommandModule<unknown, LookupCommandArgs> = {
   },
 };
 
+const updateAllCommand: CommandModule<unknown, UpdateAllCommandArgs> = {
+  command: 'updateAll',
+  describe: 'For each changemaker present in the PDC, get Charity Navigator data and upload it to PDC.',
+  builder: {
+    ...oidcOptions,
+    'charity-navigator-api-key': {
+      describe: 'CharityNavigator API key; get from account management at https://developer.charitynavigator.org/',
+      demandOption: true,
+      type: 'string',
+    },
+    'pdc-api-base-url': {
+      describe: 'Location of PDC API',
+      demandOption: true,
+      type: 'string',
+    },
+  },
+  handler: async (args) => {
+    const changemakers = await getChangemakers(args.pdcApiBaseUrl);
+    const eins = changemakers.entries.flatMap((c) => c.taxId);
+    // Charity Navigator expects no hyphens, strip them from EINs during validation.
+    const validEins = eins.map((e) => (isValidEin(e) ? e.replace('-', '') : null)).filter((e) => e !== null);
+    const invalidEins = eins.map((e) => (isValidEin(e) ? null : e)).filter((e) => e !== null);
+    if (invalidEins.length > 0) {
+      logger.warn(invalidEins, 'These EINs in PDC are invalid and will not be queried');
+    }
+    logger.info(validEins, 'Found these valid EINs which will be requested from Charity Navigator');
+    const result = await getCharityNavigatorProfiles(args.charityNavigatorApiKey, validEins)
+      .catch((err) => {
+        logger.error(err, 'error calling primary graphql api');
+        throw err;
+      });
+    logger.info({ result }, 'CharityNavigator result');
+    // TODO: the posts to PDC
+  },
+};
+
 const charityNavigator: CommandModule = {
   command: 'charityNavigator',
   describe: 'Interact with the CharityNavigator Premier API',
   builder: (y) => (y
     .command(lookupCommand)
-    .demandCommand(2)
+    .command(updateAllCommand)
+    .demandCommand(1)
   ),
   handler: () => {},
 };
