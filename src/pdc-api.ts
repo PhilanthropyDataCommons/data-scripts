@@ -1,6 +1,8 @@
 import { client } from './client';
 import type { AccessTokenSet } from './oidc';
-import type { BaseField, ProposalBundle, ChangemakerBundle } from '@pdc/sdk';
+import type {
+  BaseField, ProposalBundle, ChangemakerBundle, SourceBundle, Source,
+} from '@pdc/sdk';
 
 const callPdcApi = async <T>(
   baseUrl: string,
@@ -48,8 +50,8 @@ const getProposals = (baseUrl: string, token: AccessTokenSet) => (
 );
 
 /**
- * Get all (up to 4m) changemakers. Avoids authentication to get only direct attributes (shallow).
- * The `fields` and `fiscalSponsors` (deep) attributes will be present but empty.
+ * Get all (up to 10m) changemakers. Avoids authentication to get only direct attributes (shallow).
+ * The `fields` and `fiscalSponsors` (deep) attributes will be present but empty in this case.
  */
 const getChangemakers = (baseUrl: string) => (
   callPdcApi<ChangemakerBundle>(
@@ -57,9 +59,42 @@ const getChangemakers = (baseUrl: string) => (
     '/changemakers',
     {
       _page: '1',
-      _count: '4000000',
+      _count: '10000000',
     },
     'get',
+  )
+);
+
+/**
+ * Get all (up to 1m) sources.
+ */
+const getSources = (baseUrl: string, token: AccessTokenSet) => (
+  callPdcApi<SourceBundle>(
+    baseUrl,
+    '/sources',
+    {
+      _page: '1',
+      _count: '1000000',
+    },
+    'get',
+    token,
+  )
+);
+
+/** A corrected WritableSource (the SDK's is a bit off as of this writing) */
+export interface WritableSource {
+  label: string;
+  dataProviderShortCode: string;
+}
+
+const postSource = (baseUrl: string, token: AccessTokenSet, data: WritableSource) => (
+  callPdcApi<Source>(
+    baseUrl,
+    '/sources',
+    {},
+    'post',
+    token,
+    data,
   )
 );
 
@@ -88,5 +123,7 @@ export {
   getBaseFields,
   getChangemakers,
   getProposals,
+  getSources,
   postPlatformProviderData,
+  postSource,
 };

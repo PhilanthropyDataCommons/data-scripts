@@ -4,9 +4,12 @@ import { SetContextLink } from '@apollo/client/link/context';
 import { HttpLink } from '@apollo/client/link/http';
 import { isValidEin } from './ein';
 import { logger } from './logger';
-import { oidcOptions } from './oidc';
-import { getChangemakers } from './pdc-api';
+import { AccessTokenSet, getToken, oidcOptions } from './oidc';
+import { getChangemakers, getSources, postSource } from './pdc-api';
 import type { CommandModule } from 'yargs';
+import type { Source } from '@pdc/sdk';
+
+const CN_SHORT_CODE = 'charitynav';
 
 const queryNonprofitsPublic = gql`
   query NonprofitsPublic(
@@ -141,6 +144,22 @@ const lookupCommand: CommandModule<unknown, LookupCommandArgs> = {
   },
 };
 
+const getOrCreateSource = async (baseUrl: string, token: AccessTokenSet): Promise<Source> => {
+  const sources = await getSources(baseUrl, token);
+  const filteredSources = sources.entries.filter((s) => s.dataProviderShortCode === CN_SHORT_CODE);
+  if (filteredSources.length === 1 && filteredSources[0] !== undefined) {
+    // Hurray, an existing Charity Navigator Source was found, return it!
+    return Promise.resolve(filteredSources[0]);
+  }
+  // Create the Charity Navigator Source, we expect/require the Data Provider to exist.
+  logger.warn('Have a `pdc-admin` create a source because only administrators may be able.');
+  // The following may not succeed, doesn't succeed as of this writing.
+  return postSource(baseUrl, token, {
+    dataProviderShortCode: CN_SHORT_CODE,
+    label: 'Charity Navigator',
+  });
+};
+
 const updateAllCommand: CommandModule<unknown, UpdateAllCommandArgs> = {
   command: 'updateAll',
   describe: 'For each changemaker present in the PDC, get Charity Navigator data and upload it to PDC.',
@@ -160,20 +179,33 @@ const updateAllCommand: CommandModule<unknown, UpdateAllCommandArgs> = {
   handler: async (args) => {
     const changemakers = await getChangemakers(args.pdcApiBaseUrl);
     const eins = changemakers.entries.flatMap((c) => c.taxId);
-    // Charity Navigator expects no hyphens, strip them from EINs during validation.
-    const validEins = eins.map((e) => (isValidEin(e) ? e.replace('-', '') : null)).filter((e) => e !== null);
-    const invalidEins = eins.map((e) => (isValidEin(e) ? null : e)).filter((e) => e !== null);
+    // Charity Navigator expects no hyphens, strip them from EINs after validation.
+    const validEins = eins.filter(isValidEin).flatMap((e) => e.replace('-', ''));
+    const invalidEins = eins.filter((e) => !isValidEin(e));
     if (invalidEins.length > 0) {
       logger.warn(invalidEins, 'These EINs in PDC are invalid and will not be queried');
     }
     logger.info(validEins, 'Found these valid EINs which will be requested from Charity Navigator');
-    const result = await getCharityNavigatorProfiles(args.charityNavigatorApiKey, validEins)
-      .catch((err) => {
-        logger.error(err, 'error calling primary graphql api');
-        throw err;
-      });
-    logger.info({ result }, 'CharityNavigator result');
-    // TODO: the posts to PDC
+    const charityNavResponse = await getCharityNavigatorProfiles(
+      args.charityNavigatorApiKey,
+      validEins,
+    );
+    logger.info({ charityNavResponse }, 'CharityNavigator result');
+    // Up to this point we didn't need PDC authentication. Now we do.
+    const token = await getToken(
+      args.oidcBaseUrl,
+      args.oidcClientId,
+      args.oidcClientSecret,
+    );
+    // First, find the existing source. As of this writing, it cannot be created by non-admins.
+    const source = await getOrCreateSource(args.pdcApiBaseUrl, token);
+    logger.info(source, 'The PDC Source for Charity Navigator was found');
+    // Second, post the fields to PDC
+    /*
+    const fieldValues = charityNavResponse.data['nonprofitsPublic']['edges'].flatMap(
+
+    )
+    */
   },
 };
 
