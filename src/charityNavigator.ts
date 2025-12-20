@@ -1,5 +1,5 @@
 import { writeFile } from 'fs/promises';
-import { ApolloClient, InMemoryCache, gql } from '@apollo/client';
+import { ApolloClient, InMemoryCache, TypedDocumentNode, gql } from '@apollo/client';
 import { SetContextLink } from '@apollo/client/link/context';
 import { HttpLink } from '@apollo/client/link/http';
 import { isValidEin } from './ein';
@@ -39,6 +39,31 @@ const queryNonprofitsPublic = gql`
     }
   }
 `;
+
+interface NonprofitPublic {
+  ein: string,
+  name: string,
+  updatedAt: string,
+  website?: string,
+  phone?: string,
+  mission?: string,
+  encompassRatingId?: number,
+  encompassScore?: number,
+  encompassStarRating?: number
+  encompassPublicationDate?: string,
+}
+
+const isNonprofitPublic = (edge: object): edge is NonprofitPublic => {
+  if (typeof edge !== "object" || edge === null) {
+    return false;
+  }
+  const obj = edge as Record<string, unknown>;
+  return (
+    typeof obj.ein === "string" &&
+    typeof obj.name === "string" &&
+    typeof obj.updated === "string"
+  );
+}
 
 function apolloInit(apiUrl: string, apiKey: string) {
   const cache = new InMemoryCache();
@@ -201,11 +226,9 @@ const updateAllCommand: CommandModule<unknown, UpdateAllCommandArgs> = {
     const source = await getOrCreateSource(args.pdcApiBaseUrl, token);
     logger.info(source, 'The PDC Source for Charity Navigator was found');
     // Second, post the fields to PDC
-    /*
     const fieldValues = charityNavResponse.data['nonprofitsPublic']['edges'].flatMap(
 
     )
-    */
   },
 };
 
