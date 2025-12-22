@@ -1,5 +1,7 @@
 import { writeFile } from 'fs/promises';
-import { ApolloClient, InMemoryCache, TypedDocumentNode, gql } from '@apollo/client';
+import {
+  ApolloClient, InMemoryCache, TypedDocumentNode, gql,
+} from '@apollo/client';
 import { SetContextLink } from '@apollo/client/link/context';
 import { HttpLink } from '@apollo/client/link/http';
 import { isValidEin } from './ein';
@@ -11,7 +13,33 @@ import type { Source } from '@pdc/sdk';
 
 const CN_SHORT_CODE = 'charitynav';
 
-const queryNonprofitsPublic = gql`
+interface NonprofitPublic {
+  ein: string,
+  name: string,
+  updatedAt: string,
+  website?: string,
+  phone?: string,
+  mission?: string,
+  encompassRatingId?: number,
+  encompassScore?: number,
+  encompassStarRating?: number
+  encompassPublicationDate?: string,
+}
+
+interface PageInfo {
+  totalPages: number;
+  totalItems: number;
+  currentPage: number;
+}
+
+interface NonprofitsPublicResponse {
+  nonprofitsPublic: {
+    edges: NonprofitPublic[];
+    pageInfo: PageInfo;
+  };
+}
+
+const QueryNonprofitsPublic: TypedDocumentNode<{ perPage: number, filter: { ein: { in: string[] }, } }> = gql`
   query NonprofitsPublic(
     $perPage: Int!
     $filter: NonprofitFilters
@@ -40,30 +68,17 @@ const queryNonprofitsPublic = gql`
   }
 `;
 
-interface NonprofitPublic {
-  ein: string,
-  name: string,
-  updatedAt: string,
-  website?: string,
-  phone?: string,
-  mission?: string,
-  encompassRatingId?: number,
-  encompassScore?: number,
-  encompassStarRating?: number
-  encompassPublicationDate?: string,
-}
-
 const isNonprofitPublic = (edge: object): edge is NonprofitPublic => {
-  if (typeof edge !== "object" || edge === null) {
+  if (typeof edge !== 'object' || edge === null) {
     return false;
   }
   const obj = edge as Record<string, unknown>;
   return (
-    typeof obj.ein === "string" &&
-    typeof obj.name === "string" &&
-    typeof obj.updated === "string"
+    typeof obj.ein === 'string'
+    && typeof obj.name === 'string'
+    && typeof obj.updated === 'string'
   );
-}
+};
 
 function apolloInit(apiUrl: string, apiKey: string) {
   const cache = new InMemoryCache();
@@ -108,7 +123,7 @@ const getCharityNavigatorProfiles = async (
   logger.info(`Fetching charity navigator data for ${JSON.stringify(eins)} using vars ${JSON.stringify(variables)}`);
   return apollo
     .query({
-      query: queryNonprofitsPublic,
+      query: QueryNonprofitsPublic,
       variables,
     });
 };
@@ -225,10 +240,31 @@ const updateAllCommand: CommandModule<unknown, UpdateAllCommandArgs> = {
     // First, find the existing source. As of this writing, it cannot be created by non-admins.
     const source = await getOrCreateSource(args.pdcApiBaseUrl, token);
     logger.info(source, 'The PDC Source for Charity Navigator was found');
-    // Second, post the fields to PDC
-    const fieldValues = charityNavResponse.data['nonprofitsPublic']['edges'].flatMap(
+    // Second, post the fields to PDC, except we need to type-safe this thing
+    // See the difficulty shown at
+    // https://www.apollographql.com/docs/react/data/typescript#type-narrowing-data-with-datastate
+    // const fieldValues = charityNavResponse.data.nonprofitsPublic.edges.flatMap();
 
-    )
+    if (charityNavResponse.dataState !== undefined
+      && charityNavResponse.dataState !== null
+      && charityNavResponse.dataState === 'complete'
+      && charityNavResponse.data !== undefined
+      && charityNavResponse.data !== null
+      && typeof charityNavResponse.data === 'object'
+      && charityNavResponse.data.nonprofitsPublic !== undefined
+      && charityNavResponse.data.nonprofitsPublic !== null
+      && typeof charityNavResponse.data.nonprofitsPublic === 'object'
+      && charityNavResponse.data.nonprofitsPublic.edges !== undefined
+      && charityNavResponse.data.nonprofitsPublic.edges !== null
+      && Array.isArray(charityNavResponse.data.nonprofitsPublic.edges)
+    ) {
+      const nonprofits: NonprofitPublic[] = charityNavResponse.data.nonprofitsPublic.edges.flatMap((e) => {
+        if (isNonprofitPublic(e)) {
+          return e;
+        }
+      });
+      logger.info(nonprofits, 'Found these nonprofits');
+    }
   },
 };
 
