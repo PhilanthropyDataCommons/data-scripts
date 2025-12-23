@@ -10,7 +10,7 @@
     "generateBaseFieldsInserts": "ts-node src/generateBaseFieldsInserts",
     "generateApplicationFormJson": "ts-node src/generateApplicationFormJson",
     "postProposalVersions": "ts-node src/postProposalVersions",
-    "charityNavigator": "ts-node src/charityNavigator"
+    "charityNavigator": "ts-node src/index charityNavigator"
   },
   "author": "Open Tech Strategies",
   "license": "AGPL-3.0-or-later",

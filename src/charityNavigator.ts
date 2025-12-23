@@ -39,7 +39,21 @@ interface NonprofitsPublicResponse {
   };
 }
 
-const QueryNonprofitsPublic: TypedDocumentNode<{ perPage: number, filter: { ein: { in: string[] }, } }> = gql`
+interface NonprofitsPublicVariables {
+  perPage?: number;
+  page?: number;
+  resultSize?: number;
+  filter: {
+    ein: {
+      in: string[];
+    };
+  };
+}
+
+const QueryNonprofitsPublic: TypedDocumentNode<
+NonprofitsPublicResponse,
+NonprofitsPublicVariables
+> = gql`
   query NonprofitsPublic(
     $perPage: Int!
     $filter: NonprofitFilters
@@ -69,14 +83,11 @@ const QueryNonprofitsPublic: TypedDocumentNode<{ perPage: number, filter: { ein:
 `;
 
 const isNonprofitPublic = (edge: object): edge is NonprofitPublic => {
-  if (typeof edge !== 'object' || edge === null) {
-    return false;
-  }
   const obj = edge as Record<string, unknown>;
   return (
     typeof obj.ein === 'string'
     && typeof obj.name === 'string'
-    && typeof obj.updated === 'string'
+    && typeof obj.updatedAt === 'string'
   );
 };
 
@@ -108,7 +119,7 @@ const API_URL = 'https://api.charitynavigator.org/graphql';
 const getCharityNavigatorProfiles = async (
   apiKey: string,
   eins: string[],
-): Promise<ApolloClient.QueryResult> => {
+): Promise<ApolloClient.QueryResult<NonprofitsPublicResponse>> => {
   logger.info(`Looking up EINs ${JSON.stringify(eins)} in Charity Navigator GraphQL API`);
   const apollo = apolloInit(API_URL, apiKey);
   const variables = {
@@ -129,13 +140,13 @@ const getCharityNavigatorProfiles = async (
 };
 
 interface LookupCommandArgs {
-  'charity-navigator-api-key': string;
+  'charity-navigator-api-key'?: string;
   eins: string[];
   outputFile?: string;
 }
 
 interface UpdateAllCommandArgs {
-  'charity-navigator-api-key': string;
+  'charity-navigator-api-key'?: string;
   'oidc-base-url': string,
   'oidc-client-id': string,
   'oidc-client-secret': string,
@@ -147,9 +158,15 @@ const lookupCommand: CommandModule<unknown, LookupCommandArgs> = {
   describe: 'Fetch and display information about organizations by EIN',
   builder: (y) => (y
     .option('charity-navigator-api-key', {
-      describe: 'CharityNavigator API key; get from account management at https://developer.charitynavigator.org/',
-      demandOption: true,
+      describe: 'CharityNavigator API key; get from account management at https://developer.charitynavigator.org/ (can also be set via DS_CHARITY_NAVIGATOR_API_KEY env var)',
+      demandOption: false,
       type: 'string',
+    })
+    .check((argv) => {
+      if (!argv.charityNavigatorApiKey) {
+        throw new Error('Missing required argument: charity-navigator-api-key (set via CLI or DS_CHARITY_NAVIGATOR_API_KEY env var)');
+      }
+      return true;
     })
     .option('output-file', {
       alias: 'write',
@@ -166,7 +183,11 @@ const lookupCommand: CommandModule<unknown, LookupCommandArgs> = {
     .check(({ eins }) => !(new Set(eins.map(isValidEin)).has(false)))
   ),
   handler: async (args) => {
-    const result = await getCharityNavigatorProfiles(args.charityNavigatorApiKey, args.eins)
+    const { charityNavigatorApiKey: apiKey } = args;
+    if (!apiKey) {
+      throw new Error('Missing required argument: charity-navigator-api-key');
+    }
+    const result = await getCharityNavigatorProfiles(apiKey, args.eins)
       .catch((err) => {
         logger.error(err, 'error calling primary graphql api');
         throw err;
@@ -206,8 +227,8 @@ const updateAllCommand: CommandModule<unknown, UpdateAllCommandArgs> = {
   builder: {
     ...oidcOptions,
     'charity-navigator-api-key': {
-      describe: 'CharityNavigator API key; get from account management at https://developer.charitynavigator.org/',
-      demandOption: true,
+      describe: 'CharityNavigator API key; get from account management at https://developer.charitynavigator.org/ (can also be set via DS_CHARITY_NAVIGATOR_API_KEY env var)',
+      demandOption: false,
       type: 'string',
     },
     'pdc-api-base-url': {
@@ -217,6 +238,10 @@ const updateAllCommand: CommandModule<unknown, UpdateAllCommandArgs> = {
     },
   },
   handler: async (args) => {
+    const apiKey = args.charityNavigatorApiKey;
+    if (!apiKey) {
+      throw new Error('Missing required argument: charity-navigator-api-key (set via CLI or DS_CHARITY_NAVIGATOR_API_KEY env var)');
+    }
     const changemakers = await getChangemakers(args.pdcApiBaseUrl);
     const eins = changemakers.entries.flatMap((c) => c.taxId);
     // Charity Navigator expects no hyphens, strip them from EINs after validation.
@@ -227,7 +252,7 @@ const updateAllCommand: CommandModule<unknown, UpdateAllCommandArgs> = {
     }
     logger.info(validEins, 'Found these valid EINs which will be requested from Charity Navigator');
     const charityNavResponse = await getCharityNavigatorProfiles(
-      args.charityNavigatorApiKey,
+      apiKey,
       validEins,
     );
     logger.info({ charityNavResponse }, 'CharityNavigator result');
@@ -240,29 +265,10 @@ const updateAllCommand: CommandModule<unknown, UpdateAllCommandArgs> = {
     // First, find the existing source. As of this writing, it cannot be created by non-admins.
     const source = await getOrCreateSource(args.pdcApiBaseUrl, token);
     logger.info(source, 'The PDC Source for Charity Navigator was found');
-    // Second, post the fields to PDC, except we need to type-safe this thing
-    // See the difficulty shown at
-    // https://www.apollographql.com/docs/react/data/typescript#type-narrowing-data-with-datastate
-    // const fieldValues = charityNavResponse.data.nonprofitsPublic.edges.flatMap();
-
-    if (charityNavResponse.dataState !== undefined
-      && charityNavResponse.dataState !== null
-      && charityNavResponse.dataState === 'complete'
-      && charityNavResponse.data !== undefined
-      && charityNavResponse.data !== null
-      && typeof charityNavResponse.data === 'object'
-      && charityNavResponse.data.nonprofitsPublic !== undefined
-      && charityNavResponse.data.nonprofitsPublic !== null
-      && typeof charityNavResponse.data.nonprofitsPublic === 'object'
-      && charityNavResponse.data.nonprofitsPublic.edges !== undefined
-      && charityNavResponse.data.nonprofitsPublic.edges !== null
-      && Array.isArray(charityNavResponse.data.nonprofitsPublic.edges)
-    ) {
-      const nonprofits: NonprofitPublic[] = charityNavResponse.data.nonprofitsPublic.edges.flatMap((e) => {
-        if (isNonprofitPublic(e)) {
-          return e;
-        }
-      });
+    // Second, post the fields to PDC
+    if (charityNavResponse.data) {
+      const { edges } = charityNavResponse.data.nonprofitsPublic;
+      const nonprofits = edges.filter((e): e is NonprofitPublic => isNonprofitPublic(e));
       logger.info(nonprofits, 'Found these nonprofits');
     }
   },
