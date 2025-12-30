@@ -9,11 +9,13 @@
     "start": "ts-node src/index",
     "generateBaseFieldsInserts": "ts-node src/generateBaseFieldsInserts",
     "generateApplicationFormJson": "ts-node src/generateApplicationFormJson",
-    "postProposalVersions": "ts-node src/postProposalVersions"
+    "postProposalVersions": "ts-node src/postProposalVersions",
+    "charityNavigator": "ts-node src/index charityNavigator"
   },
-  "author": "",
+  "author": "Open Tech Strategies",
   "license": "AGPL-3.0-or-later",
   "devDependencies": {
+    "@pdc/sdk": "^0.26.1",
     "@types/node": "^24.10.1",
     "@types/yargs": "^17.0.32",
     "@typescript-eslint/eslint-plugin": "^5.62.0",
@@ -27,6 +29,7 @@
     "typescript": "^5.9.3"
   },
   "dependencies": {
+    "@apollo/client": "^4.0.11",
     "@tsconfig/node24": "^24.0.3",
     "axios": "^1.13.2",
     "csv-parse": "^5.5.6",
