@@ -1,74 +1,164 @@
 import { client } from './client';
 import type { AccessTokenSet } from './oidc';
+import type {
+  BaseField, ProposalBundle, ChangemakerBundle, SourceBundle, Source,
+} from '@pdc/sdk';
 
 const callPdcApi = async <T>(
   baseUrl: string,
   path: string,
   params: Record<string, string>,
-  token: AccessTokenSet,
   method: 'get' | 'post',
+  token?: AccessTokenSet,
   data?: unknown,
 ): Promise<T> => {
   const url = new URL(path, baseUrl);
   url.search = new URLSearchParams(params).toString();
+  const headers = token ? { authorization: `Bearer ${token.access_token}` } : {};
   const response = await client.request<T>(
     {
       method,
       url: url.toString(),
-      headers: {
-        authorization: `Bearer ${token.access_token}`,
-      },
+      headers,
       data,
     },
   );
   return response.data;
 };
 
-interface ApiBaseField {
-  id: number;
-  label: string;
-  shortCode: string;
-}
-
 const getBaseFields = (baseUrl: string, token: AccessTokenSet) => (
-  callPdcApi<ApiBaseField[]>(
+  callPdcApi<BaseField[]>(
     baseUrl,
     '/baseFields',
     {},
-    token,
     'get',
+    token,
   )
 );
 
-interface ApiProposal {
-  id: number;
-  versions: {
-    version: number;
-    fieldValues: {
-      applicationFormField: {
-        baseFieldId: number;
-        position: number;
-      };
-      value: string;
-    }[];
-  }[];
-}
-
-interface ApiProposals {
-  entries: ApiProposal[];
-  total: number;
-}
-
 const getProposals = (baseUrl: string, token: AccessTokenSet) => (
-  callPdcApi<ApiProposals>(
+  callPdcApi<ProposalBundle>(
     baseUrl,
     '/proposals',
     {
       _page: '1',
       _count: '1000',
     },
-    token,
     'get',
+    token,
+  )
+);
+
+/**
+ * Get all (up to 10m) changemakers. Avoids authentication to get only direct attributes (shallow).
+ * The `fields` and `fiscalSponsors` (deep) attributes will be present but empty in this case.
+ */
+const getChangemakers = (baseUrl: string) => (
+  callPdcApi<ChangemakerBundle>(
+    baseUrl,
+    '/changemakers',
+    {
+      _page: '1',
+      _count: '10000000',
+    },
+    'get',
+  )
+);
+
+/**
+ * Get all (up to 1m) sources.
+ */
+const getSources = (baseUrl: string, token: AccessTokenSet) => (
+  callPdcApi<SourceBundle>(
+    baseUrl,
+    '/sources',
+    {
+      _page: '1',
+      _count: '1000000',
+    },
+    'get',
+    token,
+  )
+);
+
+/** A corrected WritableSource (the SDK's is a bit off as of this writing) */
+export interface WritableSource {
+  label: string;
+  dataProviderShortCode: string;
+}
+
+const postSource = (baseUrl: string, token: AccessTokenSet, data: WritableSource) => (
+  callPdcApi<Source>(
+    baseUrl,
+    '/sources',
+    {},
+    'post',
+    token,
+    data,
+  )
+);
+
+// TODO: use the SDK, delete these temp types copied from the service repo
+interface ChangemakerFieldValueBatch {
+  readonly id: number;
+  sourceId: number;
+  notes: string | null;
+  readonly createdAt: string;
+  readonly source: Source;
+}
+interface ChangemakerFieldValue {
+  readonly id: number;
+  changemakerId: number;
+  baseFieldShortCode: string;
+  batchId: number;
+  value: string;
+  readonly file: File | null;
+  goodAsOf: string | null;
+  readonly createdAt: string;
+  readonly baseField: BaseField;
+  readonly batch: ChangemakerFieldValueBatch;
+  readonly isValid: boolean;
+}
+
+interface WritableChangemakerFieldValueBatch {
+  sourceId: number;
+  notes: string | null;
+}
+interface WritableChangemakerFieldValue {
+  changemakerId: number;
+  baseFieldShortCode: string;
+  batchId: number;
+  value: string;
+  goodAsOf: string | null;
+}
+
+const postChangemakerFieldValueBatch = (
+  baseUrl: string,
+  token: AccessTokenSet,
+  data: WritableChangemakerFieldValueBatch,
+) => (
+  callPdcApi<ChangemakerFieldValueBatch>(
+    baseUrl,
+    '/changemakerFieldValueBatches',
+    {},
+    'post',
+    token,
+    data,
+  )
+);
+
+const postChangemakerFieldValue = (
+  baseUrl: string,
+  token: AccessTokenSet,
+  data: WritableChangemakerFieldValue,
+) => (
+  callPdcApi<ChangemakerFieldValue>(
+    baseUrl,
+    '/changemakerFieldValues',
+    {},
+    'post',
+    token,
+    data,
   )
 );
 
@@ -83,8 +173,8 @@ const postPlatformProviderData = (
     baseUrl,
     '/platformProviderResponses',
     {},
-    token,
     'post',
+    token,
     {
       externalId,
       platformProvider,
@@ -94,7 +184,14 @@ const postPlatformProviderData = (
 );
 
 export {
+  ChangemakerFieldValue,
+  ChangemakerFieldValueBatch,
   getBaseFields,
+  getChangemakers,
   getProposals,
+  getSources,
+  postChangemakerFieldValueBatch,
+  postChangemakerFieldValue,
   postPlatformProviderData,
+  postSource,
 };

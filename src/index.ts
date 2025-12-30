@@ -2,6 +2,7 @@ import { config } from 'dotenv';
 import yargs from 'yargs/yargs';
 import { hideBin } from 'yargs/helpers';
 import { candid } from './candid';
+import { charityNavigator } from './charityNavigator';
 import { logger } from './logger';
 import { getTokenCommand } from './oidc';
 
@@ -31,6 +32,7 @@ const main = async (argv: string[]) => yargs(hideBin(argv))
   )
   .command(getTokenCommand)
   .command(candid)
+  .command(charityNavigator)
   .demandCommand()
   .parse();
 
