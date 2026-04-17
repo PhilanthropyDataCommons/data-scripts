@@ -29,7 +29,7 @@
     "typescript": "^5.9.3"
   },
   "dependencies": {
-    "@apollo/client": "^4.0.11",
+    "@apollo/client": "^4.1.7",
     "@tsconfig/node24": "^24.0.4",
     "axios": "^1.15.0",
     "csv-parse": "^5.5.6",
