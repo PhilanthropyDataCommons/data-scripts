@@ -1,0 +1,32 @@
+{
+  "respond": {
+    "traces": [],
+    "train": [],
+    "demos": [],
+    "signature": {
+      "instructions": "Which short codes best correspond to the given label? Only respond with 1-3 short codes from the provided list. If none are a good fit, respond with 'unknown'.\n\nImportant guidelines:\n1. Return only the plain short code text without any additional formatting, quotation marks, or special characters like «»\n2. The short code should match exactly as it appears in the context list\n3. Look for short codes that semantically match the label - consider both exact phrase matches and conceptual matches\n4. Pay attention to the full context of the label - for example, \"Type\" alone is ambiguous, but if the domain context suggests it refers to proposal types rather than organization types, prioritize accordingly\n5. When the label is ambiguous (like \"Type\"), consider that the short code might not be in the provided list - in such cases, respond with 'unknown' rather than guessing from tangentially related options\n6. Match the components of compound labels carefully - for example, \"Proposal Project Director LastName\" should map to a short code containing all these elements: proposal, project_director, and last_name\n7. Prioritize exact semantic matches over partial matches\n\nDomain-specific reasoning strategies:\n8. Distinguish between different scopes: 'proposal' prefix typically refers to project-specific information, while 'organization' prefix refers to institution-level information. For example, \"Project Budget\" should map to proposal-level budget fields, not organization-level ones.\n9. When a label uses general terms that could apply to multiple contexts (like \"news articles\" or \"reports about work\"), these rarely match standard organizational or proposal fields. Don't force a match with tangentially related codes like \"lobbying_activities\" just because they mention activities - instead, respond with 'unknown' if no code semantically captures the specific request.\n10. Prefer more specific codes over general ones when both exist. For instance, if both 'proposal_project_budget' and 'proposal_budget' are available and the label says \"Project Budget\", both may be valid matches as they're semantically equivalent in this context.\n11. Be conservative: only return codes that genuinely match the label's semantic meaning. If the label describes something that isn't represented in the available codes, always respond with 'unknown' rather than selecting a loosely related option.\n\nCritical context-awareness for date fields:\n12. When the label refers to a \"Complete Date\" or completion-related timing, carefully consider the workflow context. In review or application workflows, 'review_close_date' or 'review_end_date' typically indicates when a review process is complete, which is semantically different from 'proposal_end_date' (which refers to when a project ends). The word \"Complete\" in isolation often refers to when a process or review is finished, not when a project concludes.\n13. Distinguish between different types of dates: submission dates, review completion dates, project start/end dates, and fiscal dates. Match based on what action or milestone is being completed.\n14. 'proposal_date' typically refers to the date a proposal was submitted or created, not when something is completed.\n\nAdditional date field reasoning:\n15. In grant/proposal management systems, there are distinct lifecycle stages: proposal submission, review period, and project execution. Each has its own dates. Match the label to the appropriate stage based on semantic meaning.",
+      "fields": [
+        {
+          "prefix": "Context:",
+          "description": "list of available short codes"
+        },
+        {
+          "prefix": "Label:",
+          "description": "the label to match"
+        },
+        {
+          "prefix": "Short Codes:",
+          "description": "Up to 3 short code that are likely matches for the label"
+        }
+      ]
+    },
+    "lm": null
+  },
+  "metadata": {
+    "dependency_versions": {
+      "python": "3.12",
+      "dspy": "3.0.4",
+      "cloudpickle": "3.1"
+    }
+  }
+}
