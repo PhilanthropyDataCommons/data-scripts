@@ -160,6 +160,12 @@ interface LookupCommandArgs {
   outputFile?: string;
 }
 
+interface LookupFromPdcCommandArgs {
+  'charity-navigator-api-key'?: string;
+  'pdc-api-base-url': string;
+  outputFile?: string;
+}
+
 interface UpdateAllCommandArgs {
   'charity-navigator-api-key'?: string;
   'oidc-base-url': string,
@@ -235,6 +241,66 @@ const getChangemakerByEin = (ein: string, changemakers: ChangemakerBundle): Chan
     return matches[0];
   }
   throw new Error('How could this have happened?');
+};
+
+const lookupFromPdcCommand: CommandModule<unknown, LookupFromPdcCommandArgs> = {
+  command: 'lookupFromPdc',
+  describe: 'Fetch and display information about organizations present in PDC',
+  builder: (y) => (y
+    .option('charity-navigator-api-key', {
+      describe: 'CharityNavigator API key; get from account management at https://developer.charitynavigator.org/ (can also be set via DS_CHARITY_NAVIGATOR_API_KEY env var)',
+      demandOption: false,
+      type: 'string',
+    })
+    .check((argv) => {
+      if (!argv.charityNavigatorApiKey) {
+        throw new Error('Missing required argument: charity-navigator-api-key (set via CLI or DS_CHARITY_NAVIGATOR_API_KEY env var)');
+      }
+      return true;
+    })
+    .option('output-file', {
+      alias: 'write',
+      describe: 'Write organization information to the specified JSON file',
+      normalize: true,
+      type: 'string',
+    })
+    .option('pdc-api-base-url', {
+      describe: 'Location of PDC API',
+      demandOption: true,
+      type: 'string',
+    })
+  ),
+  handler: async (args) => {
+    const { charityNavigatorApiKey: apiKey, pdcApiBaseUrl } = args;
+    if (!apiKey) {
+      throw new Error('Missing required argument: charity-navigator-api-key');
+    }
+    if (!pdcApiBaseUrl) {
+      throw new Error('Missing required argument: pdc-api-base-url');
+    }
+    const changemakers = await getChangemakers(args.pdcApiBaseUrl);
+    const eins = changemakers.entries.flatMap((c) => c.taxId);
+    // Charity Navigator expects no hyphens, strip them from EINs after validation.
+    const validEins = eins.filter(isValidEin).flatMap((e) => e.replace('-', ''));
+    const invalidEins = eins.filter((e) => !isValidEin(e));
+    if (invalidEins.length > 0) {
+      logger.warn(invalidEins, 'These EINs in PDC are invalid and will not be queried');
+    }
+    logger.info(validEins, 'Found these valid EINs which will be requested from Charity Navigator');
+    const charityNavResponse = await getCharityNavigatorProfiles(
+      apiKey,
+      validEins,
+    );
+    if (args.outputFile) {
+      await writeFile(
+        args.outputFile,
+        JSON.stringify(charityNavResponse, null, 2),
+      );
+      logger.info(`Wrote CharityNavigator data for ${JSON.stringify(args.ein)} to ${JSON.stringify(args.outputFile)}`);
+    } else {
+      logger.info({ charityNavResponse }, 'CharityNavigator result');
+    }
+  },
 };
 
 const getOrCreateSource = async (baseUrl: string, token: AccessTokenSet): Promise<Source> => {
@@ -336,6 +402,7 @@ const charityNavigator: CommandModule = {
   describe: 'Interact with the CharityNavigator Premier API',
   builder: (y) => (y
     .command(lookupCommand)
+    .command(lookupFromPdcCommand)
     .command(updateAllCommand)
     .demandCommand(1)
   ),
