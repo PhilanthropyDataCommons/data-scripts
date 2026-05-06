@@ -2,6 +2,7 @@ import { client } from './client';
 import type { AccessTokenSet } from './oidc';
 import type {
   BaseField, ProposalBundle, ChangemakerBundle, SourceBundle, Source,
+  BaseFieldBundle,
 } from '@pdc/sdk';
 
 const callPdcApi = async <T>(
@@ -27,10 +28,13 @@ const callPdcApi = async <T>(
 };
 
 const getBaseFields = (baseUrl: string, token: AccessTokenSet) => (
-  callPdcApi<BaseField[]>(
+  callPdcApi<BaseFieldBundle>(
     baseUrl,
     '/baseFields',
-    {},
+    {
+      _page: '1',
+      _count: '2147483647',
+    },
     'get',
     token,
   )
