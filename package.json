@@ -15,7 +15,7 @@
   "author": "Open Tech Strategies",
   "license": "AGPL-3.0-or-later",
   "devDependencies": {
-    "@pdc/sdk": "^0.35.1",
+    "@pdc/sdk": "^0.36.1",
     "@types/node": "^24.12.2",
     "@types/yargs": "^17.0.32",
     "@typescript-eslint/eslint-plugin": "^5.62.0",
