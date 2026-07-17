@@ -291,6 +291,10 @@ const lookupFromPdcCommand: CommandModule<unknown, LookupFromPdcCommandArgs> = {
       apiKey,
       validEins,
     );
+    if (!charityNavResponse.data) {
+      logger.warn('No data found');
+      return;
+    }
     if (args.outputFile) {
       await writeFile(
         args.outputFile,
@@ -299,6 +303,12 @@ const lookupFromPdcCommand: CommandModule<unknown, LookupFromPdcCommandArgs> = {
       logger.info(`Wrote CharityNavigator data for ${JSON.stringify(args.ein)} to ${JSON.stringify(args.outputFile)}`);
     } else {
       logger.info({ charityNavResponse }, 'CharityNavigator result');
+      const { edges } = charityNavResponse.data.nonprofitsPublic;
+      const nonprofits = edges.filter((e): e is NonprofitPublic => isNonprofitPublic(e));
+      const changemakerIds = nonprofits.map(
+        (e) => getChangemakerByEin(e.ein, changemakers),
+      ).filter((c) => c !== null).map((c) => c.id);
+      logger.info({ changemakerIds }, 'Changemaker IDs present in CharityNavigator');
     }
   },
 };
@@ -374,7 +384,7 @@ const updateAllCommand: CommandModule<unknown, UpdateAllCommandArgs> = {
     // Third, register a batch of changemaker fields to be posted
     const fieldBatch = await postChangemakerFieldValueBatch(args.pdcApiBaseUrl, token, { sourceId: source.id, notes: `data-scripts charityNavigator.ts execution ${Date.now()}` });
     // Last, for each nonprofit, for each field, post the field
-    edges.map(async (e) => {
+    nonprofits.map(async (e) => {
       const changemaker = getChangemakerByEin(e.ein, changemakers);
       if (changemaker !== null) {
         Object.entries(baseFieldMap).map(async ([cnAttributeName, baseFieldShortCode]) => {
