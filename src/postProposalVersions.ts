@@ -3,9 +3,9 @@ import { readFileSync } from 'fs';
 import { parse as csvParse } from 'csv-parse/sync';
 import { parse as argParse } from 'ts-command-line-args';
 import axios, { AxiosError } from 'axios';
-import { assertIsCsvRow } from './csv';
-import { logger } from './logger';
-import type { CsvRow } from './csv';
+import { assertIsCsvRow } from './csv.js';
+import { logger } from './logger.js';
+import type { CsvRow } from './csv.js';
 
 interface Args {
   inputFile: string;

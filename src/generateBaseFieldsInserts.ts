@@ -9,8 +9,8 @@ import { EOL } from 'os';
 import { AssertionError } from 'assert';
 import { parse as csvParse } from 'csv-parse/sync';
 import { parse } from 'ts-command-line-args';
-import { assertIsCsvRow } from './csv';
-import { logger } from './logger';
+import { assertIsCsvRow } from './csv.js';
+import { logger } from './logger.js';
 
 interface Args {
   inputFile: string;

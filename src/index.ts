@@ -1,10 +1,10 @@
 import { config } from 'dotenv';
 import yargs from 'yargs/yargs';
 import { hideBin } from 'yargs/helpers';
-import { candid } from './candid';
-import { charityNavigator } from './charityNavigator';
-import { logger } from './logger';
-import { getTokenCommand } from './oidc';
+import { candid } from './candid.js';
+import { charityNavigator } from './charityNavigator.js';
+import { logger } from './logger.js';
+import { getTokenCommand } from './oidc.js';
 
 config();
 
