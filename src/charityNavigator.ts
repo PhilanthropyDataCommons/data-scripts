@@ -1,12 +1,12 @@
-import { writeFile } from 'fs/promises';
+import { writeFile } from 'node:fs/promises';
 import {
-  ApolloClient, InMemoryCache, TypedDocumentNode, gql,
+  ApolloClient, InMemoryCache, type TypedDocumentNode, gql,
 } from '@apollo/client';
 import { SetContextLink } from '@apollo/client/link/context';
 import { HttpLink } from '@apollo/client/link/http';
 import { isValidEin } from './ein.js';
 import { logger } from './logger.js';
-import { AccessTokenSet, getToken, oidcOptions } from './oidc.js';
+import { type AccessTokenSet, getToken, oidcOptions } from './oidc.js';
 import {
   getChangemakers, getSources, postChangemakerFieldValue, postChangemakerFieldValueBatch,
   postSource,
@@ -15,6 +15,7 @@ import type { CommandModule } from 'yargs';
 import type { Changemaker, ChangemakerBundle, Source } from '@pdc/sdk';
 
 const CN_SHORT_CODE = 'charitynav';
+const JSON_SPACES = 2;
 
 interface NonprofitPublic {
   ein: string,
@@ -217,7 +218,7 @@ const lookupCommand: CommandModule<unknown, LookupCommandArgs> = {
     if (args.outputFile) {
       await writeFile(
         args.outputFile,
-        JSON.stringify(result, null, 2),
+        JSON.stringify(result, null, JSON_SPACES),
       );
       logger.info(`Wrote CharityNavigator data for ${JSON.stringify(args.ein)} to ${JSON.stringify(args.outputFile)}`);
     } else {
@@ -298,7 +299,7 @@ const lookupFromPdcCommand: CommandModule<unknown, LookupFromPdcCommandArgs> = {
     if (args.outputFile) {
       await writeFile(
         args.outputFile,
-        JSON.stringify(charityNavResponse, null, 2),
+        JSON.stringify(charityNavResponse, null, JSON_SPACES),
       );
       logger.info(`Wrote CharityNavigator data for ${JSON.stringify(args.ein)} to ${JSON.stringify(args.outputFile)}`);
     } else {

@@ -1,5 +1,5 @@
-import { writeFile } from 'fs/promises';
-import { Issuer, TokenSet } from 'openid-client';
+import { writeFile } from 'node:fs/promises';
+import { Issuer, type TokenSet } from 'openid-client';
 import { jwtDecode } from 'jwt-decode';
 import { logger } from './logger.js';
 import type { CommandModule, Options } from 'yargs';

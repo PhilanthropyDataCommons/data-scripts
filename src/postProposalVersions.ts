@@ -1,11 +1,14 @@
 // Takes a CSV file, creates JSON bodies for POST /proposalVersions, posts them.
-import { readFileSync } from 'fs';
+import { readFileSync } from 'node:fs';
 import { parse as csvParse } from 'csv-parse/sync';
 import { parse as argParse } from 'ts-command-line-args';
 import axios, { AxiosError } from 'axios';
 import { assertIsCsvRow } from './csv.js';
 import { logger } from './logger.js';
 import type { CsvRow } from './csv.js';
+
+const JSON_SUBSTRING_LENGTH = 40;
+const HTTP_CONFLICT = 409;
 
 interface Args {
   inputFile: string;
@@ -87,7 +90,7 @@ const headers = {
 
 const requestTimeoutMs = 60000;
 
-const jsonSubstring = (json: object) => JSON.stringify(json).substring(0, 40);
+const jsonSubstring = (json: object) => JSON.stringify(json).substring(0, JSON_SUBSTRING_LENGTH);
 
 const getOrPostApplicantByExternalId = async (applicantExternalId: string) => {
   let applicant: Applicant | undefined;
@@ -122,7 +125,7 @@ const getOrPostApplicantByExternalId = async (applicantExternalId: string) => {
     } catch (error: unknown) {
       if (error instanceof AxiosError
         && error.response !== undefined
-        && error.response.status === 409) {
+        && error.response.status === HTTP_CONFLICT) {
         // Get the applicants again.
         const applicantsAgain = (
           await axios.get<Applicant[]>(

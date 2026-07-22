@@ -4,10 +4,10 @@
 import {
   createWriteStream,
   readFileSync,
-} from 'fs';
+} from 'node:fs';
 import { parse as csvParse } from 'csv-parse/sync';
 import { parse } from 'ts-command-line-args';
-import axios, { AxiosError } from 'axios';
+import axios, { type AxiosError } from 'axios';
 import { assertIsCsvRow } from './csv.js';
 import { logger } from './logger.js';
 
