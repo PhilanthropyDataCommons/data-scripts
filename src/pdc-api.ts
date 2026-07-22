@@ -1,5 +1,5 @@
-import { client } from './client';
-import type { AccessTokenSet } from './oidc';
+import { client } from './client.js';
+import type { AccessTokenSet } from './oidc.js';
 import type {
   BaseField, ProposalBundle, ChangemakerBundle, SourceBundle, Source,
   BaseFieldBundle,

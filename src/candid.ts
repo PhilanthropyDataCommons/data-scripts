@@ -1,11 +1,11 @@
 import { writeFile } from 'fs/promises';
-import { client } from './client';
-import { isValidEin } from './ein';
-import { logger } from './logger';
-import { getToken, oidcOptions } from './oidc';
-import { getProposals, postPlatformProviderData } from './pdc-api';
+import { client } from './client.js';
+import { isValidEin } from './ein.js';
+import { logger } from './logger.js';
+import { getToken, oidcOptions } from './oidc.js';
+import { getProposals, postPlatformProviderData } from './pdc-api.js';
 import type { CommandModule } from 'yargs';
-import type { AccessTokenSet } from './oidc';
+import type { AccessTokenSet } from './oidc.js';
 
 interface CandidPremierResult {
   code: number;

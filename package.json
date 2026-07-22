@@ -2,15 +2,16 @@
   "name": "data-scripts",
   "version": "1.0.0",
   "description": "",
+  "type": "module",
   "main": "dist/generateBaseFieldsInserts.js",
   "scripts": {
     "lint": "eslint ./src --ext .ts --max-warnings=0",
-    "test": "echo \"no tests\" && exit 1",
-    "start": "ts-node src/index",
-    "generateBaseFieldsInserts": "ts-node src/generateBaseFieldsInserts",
-    "generateApplicationFormJson": "ts-node src/generateApplicationFormJson",
-    "postProposalVersions": "ts-node src/postProposalVersions",
-    "charityNavigator": "ts-node src/index charityNavigator"
+    "test": "echo no tests",
+    "start": "node --import ./register-ts-node-esm.mjs src/index.ts",
+    "generateBaseFieldsInserts": "node --import ./register-ts-node-esm.mjs src/generateBaseFieldsInserts.ts",
+    "generateApplicationFormJson": "node --import ./register-ts-node-esm.mjs src/generateApplicationFormJson.ts",
+    "postProposalVersions": "node --import ./register-ts-node-esm.mjs src/postProposalVersions.ts",
+    "charityNavigator": "node --import ./register-ts-node-esm.mjs src/index.ts charityNavigator"
   },
   "author": "Open Tech Strategies",
   "license": "AGPL-3.0-or-later",

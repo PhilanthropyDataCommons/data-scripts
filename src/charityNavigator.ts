@@ -4,13 +4,13 @@ import {
 } from '@apollo/client';
 import { SetContextLink } from '@apollo/client/link/context';
 import { HttpLink } from '@apollo/client/link/http';
-import { isValidEin } from './ein';
-import { logger } from './logger';
-import { AccessTokenSet, getToken, oidcOptions } from './oidc';
+import { isValidEin } from './ein.js';
+import { logger } from './logger.js';
+import { AccessTokenSet, getToken, oidcOptions } from './oidc.js';
 import {
   getChangemakers, getSources, postChangemakerFieldValue, postChangemakerFieldValueBatch,
   postSource,
-} from './pdc-api';
+} from './pdc-api.js';
 import type { CommandModule } from 'yargs';
 import type { Changemaker, ChangemakerBundle, Source } from '@pdc/sdk';
 
