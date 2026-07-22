@@ -1,4 +1,4 @@
-import { AssertionError } from 'assert';
+import { AssertionError } from 'node:assert';
 
 export type CsvRow = Record<string, string>;
 

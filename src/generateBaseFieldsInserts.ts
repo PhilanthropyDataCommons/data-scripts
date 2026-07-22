@@ -4,9 +4,9 @@
 import {
   createWriteStream,
   readFileSync,
-} from 'fs';
-import { EOL } from 'os';
-import { AssertionError } from 'assert';
+} from 'node:fs';
+import { EOL } from 'node:os';
+import { AssertionError } from 'node:assert';
 import { parse as csvParse } from 'csv-parse/sync';
 import { parse } from 'ts-command-line-args';
 import { assertIsCsvRow } from './csv.js';

@@ -1,4 +1,4 @@
-import { writeFile } from 'fs/promises';
+import { writeFile } from 'node:fs/promises';
 import { client } from './client.js';
 import { isValidEin } from './ein.js';
 import { logger } from './logger.js';
@@ -6,6 +6,9 @@ import { getToken, oidcOptions } from './oidc.js';
 import { getProposals, postPlatformProviderData } from './pdc-api.js';
 import type { CommandModule } from 'yargs';
 import type { AccessTokenSet } from './oidc.js';
+
+const JSON_SPACES = 2;
+const RATE_LIMIT_DELAY_MS = 6000;
 
 interface CandidPremierResult {
   code: number;
@@ -64,7 +67,7 @@ const lookupCommand: CommandModule<unknown, LookupCommandArgs> = {
     if (args.outputFile) {
       await writeFile(
         args.outputFile,
-        JSON.stringify(result, null, 2),
+        JSON.stringify(result, null, JSON_SPACES),
       );
       logger.info(`Wrote Candid data for ${args.ein} to ${args.outputFile}`);
     } else {
@@ -195,7 +198,7 @@ const updateAllCommand: CommandModule<unknown, UpdateAllCommandArgs> = {
       // Our Candid API subscription has a rate limit of 10 calls per
       // minute. Rather than implement 429 request failure handling and
       // exponential backoff, just sleep 6 seconds after each call.
-      await new Promise((r) => { setTimeout(r, 6000); });
+      await new Promise((r) => { setTimeout(r, RATE_LIMIT_DELAY_MS); });
     }
   },
 };

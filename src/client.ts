@@ -1,4 +1,4 @@
-import axios, { InternalAxiosRequestConfig, AxiosResponse } from 'axios';
+import axios, { type InternalAxiosRequestConfig, type AxiosResponse } from 'axios';
 import { logger } from './logger.js';
 
 const clientLogger = logger.child({}, { msgPrefix: '🌐 ' });

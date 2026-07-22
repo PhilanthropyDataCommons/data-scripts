@@ -1,0 +1,37 @@
+# Ignore artifacts:
+dist
+coverage
+
+# Lock file (machine-generated, not hand-formatted):
+package-lock.json
+
+# Python scripts and generated data live outside the TS project:
+standalone/
+
+# The pre-existing data-scripts predate the shared prettier config (`main`
+# had no .prettierrc). Reformatting them in this ESM-conversion commit would
+# inject large, ESM-unrelated whitespace churn (commas->semicolons in
+# interfaces, 80-col wraps collapsing to 120, embedded GraphQL re-indentation,
+# leading->trailing operators) and pollute future `git blame`. Defer their
+# prettier formatting to a separate follow-up, consistent with the ESLint rule
+# overrides in eslint.config.mjs. New code (unit tests) and config files remain
+# prettier-enforced.
+# Authored by GLM-5.2.
+src/candid.ts
+src/charityNavigator.ts
+src/client.ts
+src/csv.ts
+src/ein.ts
+src/generateApplicationFormJson.ts
+src/generateBaseFieldsInserts.ts
+src/index.ts
+src/logger.ts
+src/oidc.ts
+src/pdc-api.ts
+src/postProposalVersions.ts
+
+# The pre-existing .github configs and README likewise predate the shared
+# prettier config; reformatting them here is ESM-unrelated churn (YAML quote
+# style, Markdown spacing). Defer to the same separate follow-up.
+.github/
+README.md

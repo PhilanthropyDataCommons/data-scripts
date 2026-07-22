@@ -188,8 +188,8 @@ const postPlatformProviderData = (
 );
 
 export {
-  ChangemakerFieldValue,
-  ChangemakerFieldValueBatch,
+  type ChangemakerFieldValue,
+  type ChangemakerFieldValueBatch,
   getBaseFields,
   getChangemakers,
   getProposals,
