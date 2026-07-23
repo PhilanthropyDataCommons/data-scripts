@@ -1,89 +1,66 @@
 import { client } from './client.js';
 import type { AccessTokenSet } from './oidc.js';
-import type {
-  BaseField, ProposalBundle, ChangemakerBundle, SourceBundle, Source,
-  BaseFieldBundle,
-} from '@pdc/sdk';
+import type { BaseField, ProposalBundle, ChangemakerBundle, SourceBundle, Source, BaseFieldBundle } from '@pdc/sdk';
 
 const callPdcApi = async <T>(
   baseUrl: string,
   path: string,
-  params: Record<string, string>,
   method: 'get' | 'post',
-  token?: AccessTokenSet,
-  data?: unknown,
+  options: { params: Record<string, string>; token?: AccessTokenSet; data?: unknown },
 ): Promise<T> => {
   const url = new URL(path, baseUrl);
-  url.search = new URLSearchParams(params).toString();
-  const headers = token ? { authorization: `Bearer ${token.access_token}` } : {};
-  const response = await client.request<T>(
-    {
-      method,
-      url: url.toString(),
-      headers,
-      data,
-    },
-  );
+  url.search = new URLSearchParams(options.params).toString();
+  const headers = options.token === undefined ? {} : { authorization: `Bearer ${options.token.access_token}` };
+  const response = await client.request<T>({
+    method,
+    url: url.toString(),
+    headers,
+    data: options.data,
+  });
   return response.data;
 };
 
-const getBaseFields = (baseUrl: string, token: AccessTokenSet) => (
-  callPdcApi<BaseFieldBundle>(
-    baseUrl,
-    '/baseFields',
-    {
+const getBaseFields = async (baseUrl: string, token: AccessTokenSet): Promise<BaseFieldBundle> =>
+  await callPdcApi<BaseFieldBundle>(baseUrl, '/baseFields', 'get', {
+    params: {
       _page: '1',
       _count: '2147483647',
     },
-    'get',
     token,
-  )
-);
+  });
 
-const getProposals = (baseUrl: string, token: AccessTokenSet) => (
-  callPdcApi<ProposalBundle>(
-    baseUrl,
-    '/proposals',
-    {
+const getProposals = async (baseUrl: string, token: AccessTokenSet): Promise<ProposalBundle> =>
+  await callPdcApi<ProposalBundle>(baseUrl, '/proposals', 'get', {
+    params: {
       _page: '1',
       _count: '1000',
     },
-    'get',
     token,
-  )
-);
+  });
 
 /**
  * Get all (up to 10m) changemakers. Avoids authentication to get only direct attributes (shallow).
  * The `fields` and `fiscalSponsors` (deep) attributes will be present but empty in this case.
  */
-const getChangemakers = (baseUrl: string) => (
-  callPdcApi<ChangemakerBundle>(
-    baseUrl,
-    '/changemakers',
-    {
+const getChangemakers = async (baseUrl: string): Promise<ChangemakerBundle> =>
+  await callPdcApi<ChangemakerBundle>(baseUrl, '/changemakers', 'get', {
+    params: {
       _page: '1',
       _count: '10000000',
     },
-    'get',
-  )
-);
+  });
 
 /**
  * Get all (up to 1m) sources.
  */
-const getSources = (baseUrl: string, token: AccessTokenSet) => (
-  callPdcApi<SourceBundle>(
-    baseUrl,
-    '/sources',
-    {
+const getSources = async (baseUrl: string, token: AccessTokenSet): Promise<SourceBundle> =>
+  await callPdcApi<SourceBundle>(baseUrl, '/sources', 'get', {
+    params: {
       _page: '1',
       _count: '1000000',
     },
-    'get',
     token,
-  )
-);
+  });
 
 /** A corrected WritableSource (the SDK's is a bit off as of this writing) */
 export interface WritableSource {
@@ -91,16 +68,8 @@ export interface WritableSource {
   dataProviderShortCode: string;
 }
 
-const postSource = (baseUrl: string, token: AccessTokenSet, data: WritableSource) => (
-  callPdcApi<Source>(
-    baseUrl,
-    '/sources',
-    {},
-    'post',
-    token,
-    data,
-  )
-);
+const postSource = async (baseUrl: string, token: AccessTokenSet, data: WritableSource): Promise<Source> =>
+  await callPdcApi<Source>(baseUrl, '/sources', 'post', { params: {}, token, data });
 
 // TODO: use the SDK, delete these temp types copied from the service repo
 interface ChangemakerFieldValueBatch {
@@ -136,56 +105,30 @@ interface WritableChangemakerFieldValue {
   goodAsOf: string | null;
 }
 
-const postChangemakerFieldValueBatch = (
+const postChangemakerFieldValueBatch = async (
   baseUrl: string,
   token: AccessTokenSet,
   data: WritableChangemakerFieldValueBatch,
-) => (
-  callPdcApi<ChangemakerFieldValueBatch>(
-    baseUrl,
-    '/changemakerFieldValueBatches',
-    {},
-    'post',
+): Promise<ChangemakerFieldValueBatch> =>
+  await callPdcApi<ChangemakerFieldValueBatch>(baseUrl, '/changemakerFieldValueBatches', 'post', {
+    params: {},
     token,
     data,
-  )
-);
+  });
 
-const postChangemakerFieldValue = (
+const postChangemakerFieldValue = async (
   baseUrl: string,
   token: AccessTokenSet,
   data: WritableChangemakerFieldValue,
-) => (
-  callPdcApi<ChangemakerFieldValue>(
-    baseUrl,
-    '/changemakerFieldValues',
-    {},
-    'post',
-    token,
-    data,
-  )
-);
+): Promise<ChangemakerFieldValue> =>
+  await callPdcApi<ChangemakerFieldValue>(baseUrl, '/changemakerFieldValues', 'post', { params: {}, token, data });
 
-const postPlatformProviderData = (
+const postPlatformProviderData = async (
   baseUrl: string,
   token: AccessTokenSet,
-  externalId: string,
-  platformProvider: string,
-  data: object,
-) => (
-  callPdcApi(
-    baseUrl,
-    '/platformProviderResponses',
-    {},
-    'post',
-    token,
-    {
-      externalId,
-      platformProvider,
-      data,
-    },
-  )
-);
+  body: { externalId: string; platformProvider: string; data: object },
+): Promise<unknown> =>
+  await callPdcApi(baseUrl, '/platformProviderResponses', 'post', { params: {}, token, data: body });
 
 export {
   type ChangemakerFieldValue,

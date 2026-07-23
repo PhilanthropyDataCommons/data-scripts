@@ -8,15 +8,9 @@ export interface AccessTokenSet extends TokenSet {
   access_token: string;
 }
 
-const isAccessToken = (token: TokenSet): token is AccessTokenSet => (
-  'access_token' in token
-);
+const isAccessToken = (token: TokenSet): token is AccessTokenSet => 'access_token' in token;
 
-const getToken = async (
-  baseUrl: string,
-  clientId: string,
-  clientSecret: string,
-): Promise<AccessTokenSet> => {
+const getToken = async (baseUrl: string, clientId: string, clientSecret: string): Promise<AccessTokenSet> => {
   const issuer = await Issuer.discover(baseUrl);
   logger.debug(`Discovered OIDC issuer at ${issuer.metadata.issuer}`);
 
@@ -33,10 +27,10 @@ const getToken = async (
   }
 
   const { jti } = jwtDecode(token.access_token);
-  if (jti) {
-    logger.debug(`Retrieved token with id ${jti}`);
-  } else {
+  if (jti === undefined) {
     logger.debug('Retrieved token');
+  } else {
+    logger.debug(`Retrieved token with id ${jti}`);
   }
 
   return token;
@@ -81,26 +75,15 @@ const getTokenCommand: CommandModule<object, TokenCommandArgs> = {
     },
   },
   handler: async (args) => {
-    const token = await getToken(
-      args.oidcBaseUrl,
-      args.oidcClientId,
-      args.oidcClientSecret,
-    );
+    const token = await getToken(args.oidcBaseUrl, args.oidcClientId, args.oidcClientSecret);
 
-    if (args.outputFile) {
-      await writeFile(
-        args.outputFile,
-        token.access_token,
-      );
-      logger.info(`Wrote token to ${args.outputFile}`);
-    } else {
+    if (args.outputFile === undefined) {
       logger.info({ token: jwtDecode(token.access_token) }, 'Successfully retrieved token');
+    } else {
+      await writeFile(args.outputFile, token.access_token);
+      logger.info(`Wrote token to ${args.outputFile}`);
     }
   },
 };
 
-export {
-  getToken,
-  getTokenCommand,
-  oidcOptions,
-};
+export { getToken, getTokenCommand, oidcOptions };

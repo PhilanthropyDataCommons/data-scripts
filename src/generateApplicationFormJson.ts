@@ -1,13 +1,10 @@
 // Takes a comma-separated values (CSV) file and creates a JSON body for POST /applicationForms.
 // The CSV is usually derived from the following URL using xlsx export and `xslx2csv`:
 // https://docs.google.com/spreadsheets/d/1Ep3_MEIyIbhxJ5TpH5x4Q1fRZqr1CFHXZ_uv3fEOSEk
-import {
-  createWriteStream,
-  readFileSync,
-} from 'node:fs';
+import { createWriteStream, readFileSync } from 'node:fs';
 import { parse as csvParse } from 'csv-parse/sync';
 import { parse } from 'ts-command-line-args';
-import axios, { type AxiosError } from 'axios';
+import axios from 'axios';
 import { assertIsCsvRow } from './csv.js';
 import { logger } from './logger.js';
 
@@ -47,14 +44,13 @@ const args = parse<Args>({
   apiUrl: String,
 });
 
+/* eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- csv-parse's sync `parse` is typed to return `any` */
 const csvParser = csvParse(readFileSync(args.inputFile, 'utf8'), {
   columns: true,
 }) as unknown[];
 
 const jsonOutput = createWriteStream(args.outputFile, 'utf8');
-const {
-  opportunityId, funder, bearerToken, apiUrl,
-} = args;
+const { opportunityId, funder, bearerToken, apiUrl } = args;
 
 const applicationForm: ApplicationForm = {
   opportunityId,
@@ -62,48 +58,52 @@ const applicationForm: ApplicationForm = {
 };
 let counter = 0;
 
-axios(`${apiUrl}/baseFields`, {
+axios<BaseField[]>(`${apiUrl}/baseFields`, {
   method: 'GET',
   headers: {
     accept: 'application/json',
     Authorization: `Bearer ${bearerToken}`,
   },
-}).then((response) => {
-  const fields: BaseField[] = response.data as BaseField[];
-  const label = `${funder}: field label`;
-  const pos = `${funder}: form position`;
-  Promise.all(csvParser.map((row) => {
-    assertIsCsvRow(row);
-    let field: BaseField;
-    if (row[label] !== '') {
-      const shortCode = row['Internal field name'];
-      const fieldsFiltered = fields.filter((e) => e.shortCode === shortCode);
-      if (fieldsFiltered.length === 1 && fieldsFiltered[0] !== undefined) {
-        [field] = fieldsFiltered;
-      } else {
-        const code = shortCode !== undefined ? shortCode : 'undefined';
-        throw new Error(`Found ${fieldsFiltered.length} base fields (expected 1): shortCode=${code}`);
-      }
-      const position = row[pos];
-      const applicationFormField: ApplicationFormField = {
-        baseFieldId: field.id,
-        position: typeof position === 'number' ? position : (counter += 1),
-        label: row[label],
-      };
-      return applicationFormField;
-    }
-    return undefined;
-  })).then((applicationFormFields) => {
-    applicationFormFields.forEach((field) => {
-      if (field !== undefined) {
-        applicationForm.fields.push(field);
-      }
-    });
-    jsonOutput.write(JSON.stringify(applicationForm));
-    jsonOutput.close();
-  }).catch((error: unknown) => {
-    logger.error(`Error creating form fields: ${JSON.stringify(error)}`);
+})
+  .then((response) => {
+    const fields: BaseField[] = response.data;
+    const label = `${funder}: field label`;
+    const pos = `${funder}: form position`;
+    Promise.resolve(
+      csvParser.map((row) => {
+        assertIsCsvRow(row);
+        if (row[label] !== '') {
+          const { 'Internal field name': shortCode } = row;
+          const fieldsFiltered = fields.filter((e) => e.shortCode === shortCode);
+          const [field] = fieldsFiltered;
+          if (fieldsFiltered.length !== 1 || field === undefined) {
+            const code = shortCode ?? 'undefined';
+            throw new Error(`Found ${fieldsFiltered.length} base fields (expected 1): shortCode=${code}`);
+          }
+          const { [pos]: position } = row;
+          const applicationFormField: ApplicationFormField = {
+            baseFieldId: field.id,
+            position: typeof position === 'number' ? position : (counter += 1),
+            label: row[label],
+          };
+          return applicationFormField;
+        }
+        return undefined;
+      }),
+    )
+      .then((applicationFormFields) => {
+        applicationFormFields.forEach((field) => {
+          if (field !== undefined) {
+            applicationForm.fields.push(field);
+          }
+        });
+        jsonOutput.write(JSON.stringify(applicationForm));
+        jsonOutput.close();
+      })
+      .catch((error: unknown) => {
+        logger.error({ error }, 'Error creating form fields');
+      });
+  })
+  .catch((error: unknown) => {
+    logger.error({ error }, 'Error getting base fields');
   });
-}).catch((error: AxiosError) => {
-  logger.error({ error }, 'Error getting base fields');
-});

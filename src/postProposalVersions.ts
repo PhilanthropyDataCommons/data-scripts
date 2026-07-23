@@ -75,13 +75,7 @@ const args = argParse<Args>({
   apiUrl: String,
 });
 
-const {
-  applicantColumnName,
-  applicationFormId,
-  proposalExternalIdColumnName,
-  bearerToken,
-  apiUrl,
-} = args;
+const { applicantColumnName, applicationFormId, proposalExternalIdColumnName, bearerToken, apiUrl } = args;
 
 const headers = {
   accept: 'application/json',
@@ -90,21 +84,15 @@ const headers = {
 
 const requestTimeoutMs = 60000;
 
-const jsonSubstring = (json: object) => JSON.stringify(json).substring(0, JSON_SUBSTRING_LENGTH);
+const jsonSubstring = (json: object): string => JSON.stringify(json).substring(0, JSON_SUBSTRING_LENGTH);
 
-const getOrPostApplicantByExternalId = async (applicantExternalId: string) => {
-  let applicant: Applicant | undefined;
-  let finalApplicant: Applicant;
+const getOrPostApplicantByExternalId = async (applicantExternalId: string): Promise<Applicant> => {
+  let applicant: Applicant | undefined = undefined;
 
-  const applicants = (
-    await axios.get<Applicant[]>(
-      `${apiUrl}/applicants`,
-      {
-        timeout: requestTimeoutMs,
-        headers,
-      },
-    )
-  ).data;
+  const { data: applicants } = await axios.get<Applicant[]>(`${apiUrl}/applicants`, {
+    timeout: requestTimeoutMs,
+    headers,
+  });
 
   if (applicants.length > 0) {
     [applicant] = applicants.filter((a) => a.externalId === applicantExternalId);
@@ -112,30 +100,21 @@ const getOrPostApplicantByExternalId = async (applicantExternalId: string) => {
 
   if (applicant === undefined) {
     try {
-      applicant = (
-        await axios.post<Applicant>(
-          `${apiUrl}/applicants`,
-          { externalId: applicantExternalId },
-          {
-            timeout: requestTimeoutMs,
-            headers,
-          },
-        )
-      ).data;
+      ({ data: applicant } = await axios.post<Applicant>(
+        `${apiUrl}/applicants`,
+        { externalId: applicantExternalId },
+        {
+          timeout: requestTimeoutMs,
+          headers,
+        },
+      ));
     } catch (error: unknown) {
-      if (error instanceof AxiosError
-        && error.response !== undefined
-        && error.response.status === HTTP_CONFLICT) {
+      if (error instanceof AxiosError && error.response?.status === HTTP_CONFLICT) {
         // Get the applicants again.
-        const applicantsAgain = (
-          await axios.get<Applicant[]>(
-            `${apiUrl}/applicants`,
-            {
-              timeout: requestTimeoutMs,
-              headers,
-            },
-          )
-        ).data;
+        const { data: applicantsAgain } = await axios.get<Applicant[]>(`${apiUrl}/applicants`, {
+          timeout: requestTimeoutMs,
+          headers,
+        });
 
         if (applicantsAgain.length > 0) {
           [applicant] = applicantsAgain.filter((a) => a.externalId === applicantExternalId);
@@ -146,11 +125,8 @@ const getOrPostApplicantByExternalId = async (applicantExternalId: string) => {
 
   if (applicant === undefined) {
     throw new Error('Could not GET or POST an applicant.');
-  } else {
-    finalApplicant = applicant;
   }
-
-  return finalApplicant;
+  return applicant;
 };
 
 const getOrPostProposal = async (
@@ -158,48 +134,43 @@ const getOrPostProposal = async (
   opportunityId: number,
   applicant: Applicant,
   proposalExternalId: string,
-) => {
-  let proposal: Proposal | undefined;
+): Promise<Proposal> => {
+  let proposal: Proposal | undefined = undefined;
 
   // Pick the only existing proposal with given opportunity id, applicant id, and external id.
   // This should work because there is a unique constraint across these three fields.
   if (proposals.length > 0) {
     [proposal] = proposals.filter(
-      (p) => (p.opportunityId === opportunityId
-        && p.applicantId === applicant.id
-        && p.externalId === proposalExternalId
-      ),
+      (p) => p.opportunityId === opportunityId && p.applicantId === applicant.id && p.externalId === proposalExternalId,
     );
   }
 
   // If the proposal did not exist, create it.
   if (proposal === undefined) {
-    logger.info(`No existing proposal for opportunityId=${opportunityId}, applicantId=${applicant.id}, and externalId=${proposalExternalId}`);
-    proposal = (
-      await axios.post<Proposal>(
-        `${apiUrl}/proposals`,
-        {
-          applicantId: applicant.id,
-          opportunityId,
-          externalId: proposalExternalId,
-        },
-        {
-          timeout: requestTimeoutMs,
-          headers,
-        },
-      )
-    ).data;
+    logger.info(
+      `No existing proposal for opportunityId=${opportunityId}, applicantId=${applicant.id}, and externalId=${proposalExternalId}`,
+    );
+    ({ data: proposal } = await axios.post<Proposal>(
+      `${apiUrl}/proposals`,
+      {
+        applicantId: applicant.id,
+        opportunityId,
+        externalId: proposalExternalId,
+      },
+      {
+        timeout: requestTimeoutMs,
+        headers,
+      },
+    ));
   } else {
-    logger.info(`Found existing proposal with id=${proposal.id} for opportunityId=${opportunityId}, applicantId=${applicant.id}, and externalId=${proposalExternalId}`);
+    logger.info(
+      `Found existing proposal with id=${proposal.id} for opportunityId=${opportunityId}, applicantId=${applicant.id}, and externalId=${proposalExternalId}`,
+    );
   }
   return proposal;
 };
 
-const postProposalVersion = async (
-  proposal: Proposal,
-  form: ApplicationForm,
-  row: CsvRow,
-) => {
+const postProposalVersion = async (proposal: Proposal, form: ApplicationForm, row: CsvRow): Promise<void> => {
   const proposalVersion: ProposalVersion = {
     proposalId: proposal.id,
     applicationFormId,
@@ -211,101 +182,95 @@ const postProposalVersion = async (
     // We can replicate the same application form field to multiple canonical fields.
     // The specific use case is "Organization Legal Name" to "Organization Name".
     Object.values(formFields).forEach((formField) => {
-      const fieldValue = row[key];
+      const { [key]: fieldValue } = row;
       if (fieldValue === undefined) {
         throw new Error(`Undefined value for key '${key}' in row`);
-      } else if (fieldValue !== '') {
+      } else if (fieldValue === '') {
+        logger.info(`Field value for '${key}' for proposal '${proposal.id}' was null or empty: skipped.`);
+      } else {
         const proposalValue: ProposalFieldValue = {
           applicationFormFieldId: formField.id,
           position: formField.position,
           value: fieldValue,
         };
         proposalVersion.fieldValues.push(proposalValue);
-      } else {
-        logger.info(`Field value for '${key}' for proposal '${proposal.id}' was null or empty: skipped.`);
       }
     });
     if (formFields.length === 0) {
-      logger.info(`Failed to find any field label matching '${key}' in row '${jsonSubstring(row)}...', got ${formFields.length}`);
+      logger.info(
+        `Failed to find any field label matching '${key}' in row '${jsonSubstring(row)}...', got ${formFields.length}`,
+      );
     }
   });
 
   // Post the new proposal version using the data in `proposalVersion`.
-  await axios.post<ProposalVersion>(
-    `${apiUrl}/proposalVersions`,
-    proposalVersion,
-    {
-      timeout: requestTimeoutMs,
-      headers,
-    },
-  );
+  await axios.post<ProposalVersion>(`${apiUrl}/proposalVersions`, proposalVersion, {
+    timeout: requestTimeoutMs,
+    headers,
+  });
 };
 
-const postProposalVersions = async () => {
+const postProposalVersions = async (): Promise<void> => {
   let rowsRead = 0;
   let versionsPosted = 0;
 
   try {
-    const form = (
-      await axios.get<ApplicationForm>(`${apiUrl}/applicationForms/${applicationFormId}`, {
-        headers,
-        params: {
-          includeFields: 'true',
-        },
-      })
-    ).data;
+    const { data: form } = await axios.get<ApplicationForm>(`${apiUrl}/applicationForms/${applicationFormId}`, {
+      headers,
+      params: {
+        includeFields: 'true',
+      },
+    });
 
     logger.info(`Got the relevant application form: '${jsonSubstring(form)}...'`);
 
-    const proposals = (
-      await axios.get<Bundle<Proposal>>(`${apiUrl}/proposals`, {
-        headers,
-        params: {
-          _page: 1,
-          _count: 100000,
-        },
-      })
-    ).data.entries;
+    const {
+      data: { entries: proposals },
+    } = await axios.get<Bundle<Proposal>>(`${apiUrl}/proposals`, {
+      headers,
+      params: {
+        _page: 1,
+        _count: 100000,
+      },
+    });
 
     logger.info(`Got ${proposals.length} existing proposals.`);
 
+    /* eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- csv-parse's sync `parse` is typed to return `any` */
     const csvParser = csvParse(readFileSync(args.inputFile, 'utf8'), {
       columns: true,
     }) as unknown[];
 
-    await Promise.all(csvParser.map(async (row) => {
-      assertIsCsvRow(row);
-      rowsRead += 1;
-      logger.info(`Read CSV row: '${jsonSubstring(row)}...'`);
-      // First, we need the applicant id (not its external id), so look it up or create it.
-      // Extract the applicant external id from the given field name.
-      const applicantExternalId = row[applicantColumnName];
-      if (applicantExternalId === undefined) {
-        throw new Error(`Row '${jsonSubstring(row)}...' had undefined applicantExternalId value`);
-      }
-      const applicant = await getOrPostApplicantByExternalId(applicantExternalId);
+    await Promise.all(
+      csvParser.map(async (row) => {
+        assertIsCsvRow(row);
+        rowsRead += 1;
+        logger.info(`Read CSV row: '${jsonSubstring(row)}...'`);
+        // First, we need the applicant id (not its external id), so look it up or create it.
+        // Extract the applicant external id from the given field name.
+        const { [applicantColumnName]: applicantExternalId } = row;
+        if (applicantExternalId === undefined) {
+          throw new Error(`Row '${jsonSubstring(row)}...' had undefined applicantExternalId value`);
+        }
+        const applicant = await getOrPostApplicantByExternalId(applicantExternalId);
 
-      // Second, we need a proposal ID for the given applicant/opportunity/externalid combination.
-      // We assume the applicant has been found or created above and that the opportunity has been
-      // created before the application form. We get the opportunity ID from the application form.
-      // Extract the proposal external id from the given field name.
-      const proposalExternalId = row[proposalExternalIdColumnName];
-      if (proposalExternalId === undefined) {
-        throw new Error(`Row '${jsonSubstring(row)}...' had undefined proposalExternalId value`);
-      }
-      logger.info(`Found proposal external id: ${proposalExternalId}`);
-      const proposal = await getOrPostProposal(
-        proposals,
-        form.opportunityId,
-        applicant,
-        proposalExternalId,
-      );
-      logger.info(`Proposal id: ${proposal.id}`);
+        // Second, we need a proposal ID for the given applicant/opportunity/externalid combination.
+        // We assume the applicant has been found or created above and that the opportunity has been
+        // created before the application form. We get the opportunity ID from the application form.
+        // Extract the proposal external id from the given field name.
+        const { [proposalExternalIdColumnName]: proposalExternalId } = row;
+        if (proposalExternalId === undefined) {
+          throw new Error(`Row '${jsonSubstring(row)}...' had undefined proposalExternalId value`);
+        }
+        logger.info(`Found proposal external id: ${proposalExternalId}`);
+        const proposal = await getOrPostProposal(proposals, form.opportunityId, applicant, proposalExternalId);
+        logger.info(`Proposal id: ${proposal.id}`);
 
-      // Third, we create a proposal version, populate the fieldValues array, and post it.
-      await postProposalVersion(proposal, form, row);
-      versionsPosted += 1;
-    }));
+        // Third, we create a proposal version, populate the fieldValues array, and post it.
+        await postProposalVersion(proposal, form, row);
+        versionsPosted += 1;
+      }),
+    );
 
     logger.info(`Finished. Read ${rowsRead} rows, posted ${versionsPosted} proposal versions.`);
   } catch (error: unknown) {
@@ -316,6 +281,7 @@ const postProposalVersions = async () => {
 postProposalVersions()
   .then(() => {
     logger.info('Really finished.');
-  }).catch((error: unknown) => {
+  })
+  .catch((error: unknown) => {
     logger.info(error);
   });

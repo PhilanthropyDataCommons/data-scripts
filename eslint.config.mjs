@@ -87,57 +87,6 @@ export default defineConfig([
     },
   },
   {
-    // The data-scripts predate the shared strict `eslint-config-love` configuration
-    // used by the `service` repo. The rules below are turned off here because the
-    // pre-existing scripts call external APIs and would require careful,
-    // separately-tested refactoring to comply. Bringing the code up to the full
-    // strictness of the service repo is tracked as a separate follow-up effort. All other
-    // ESLint settings (flat config, plugin stack, parser/resolver, import order,
-    // no-default-export, no-unused-vars, no-magic-numbers, prettier, pino, and
-    // sort-exports) match the service repo.
-    //
-    // The additional rules disabled below would otherwise force mechanical
-    // refactors of the pre-existing scripts (`async`/`await` wrapping of promise
-    // functions, nullish coalescing, optional chaining, the regexp `v` flag,
-    // promise parameter names, negated-condition flips, template-literal
-    // simplification, and the await-in-loop directive pair). Those refactors are
-    // unrelated to the CommonJS->ESM conversion and would inject large, noisy
-    // diffs (and pollute future `git blame`), so they are deferred to the same
-    // separate follow-up rather than performed in this conversion commit. The
-    // ESM-related type-import rule (`consistent-type-imports`) and the type
-    // re-export rule (`consistent-type-exports`) stay on, as do the explicitly
-    // configured `no-magic-numbers` (satisfied via named constants) and the
-    // import-order rules.
-    //
-    // Authored by GLM-5.2.
-    rules: {
-      '@typescript-eslint/strict-boolean-expressions': 'off',
-      '@typescript-eslint/no-unsafe-type-assertion': 'off',
-      '@typescript-eslint/explicit-function-return-type': 'off',
-      '@typescript-eslint/prefer-destructuring': 'off',
-      '@typescript-eslint/init-declarations': 'off',
-      '@typescript-eslint/no-empty-function': 'off',
-      '@typescript-eslint/use-unknown-in-catch-callback-variable': 'off',
-      '@typescript-eslint/no-floating-promises': 'off',
-      '@typescript-eslint/require-await': 'off',
-      '@typescript-eslint/await-thenable': 'off',
-      '@typescript-eslint/max-params': 'off',
-      '@typescript-eslint/strict-void-return': 'off',
-      'promise/avoid-new': 'off',
-
-      // Deferred pre-existing-code refactors (see comment above):
-      '@typescript-eslint/promise-function-async': 'off',
-      '@typescript-eslint/return-await': 'off',
-      '@typescript-eslint/prefer-nullish-coalescing': 'off',
-      '@typescript-eslint/prefer-optional-chain': 'off',
-      '@typescript-eslint/no-unnecessary-template-expression': 'off',
-      'no-negated-condition': 'off',
-      'require-unicode-regexp': 'off',
-      'promise/param-names': 'off',
-      '@eslint-community/eslint-comments/disable-enable-pair': 'off',
-    },
-  },
-  {
     files: ['**/index.ts'],
 
     rules: {

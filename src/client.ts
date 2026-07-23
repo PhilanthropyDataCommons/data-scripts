@@ -3,9 +3,9 @@ import { logger } from './logger.js';
 
 const clientLogger = logger.child({}, { msgPrefix: '🌐 ' });
 
-const logRequest = (config: InternalAxiosRequestConfig) => {
+const logRequest = (config: InternalAxiosRequestConfig): InternalAxiosRequestConfig => {
   const { method, url } = config;
-  if (method && url) {
+  if (method !== undefined && url !== undefined) {
     clientLogger.debug(`${method} ${url}`);
   } else {
     clientLogger.debug({ config }, 'Request');
@@ -13,9 +13,13 @@ const logRequest = (config: InternalAxiosRequestConfig) => {
   return config;
 };
 
-const logResponse = (response: AxiosResponse) => {
-  const { config: { method, url }, status, statusText } = response;
-  if (method && url) {
+const logResponse = (response: AxiosResponse): AxiosResponse => {
+  const {
+    config: { method, url },
+    status,
+    statusText,
+  } = response;
+  if (method !== undefined && url !== undefined) {
     clientLogger.debug(`${method} ${url} => ${status} ${statusText}`);
   } else {
     clientLogger.debug({ config: response.config }, `${status} ${statusText}`);
