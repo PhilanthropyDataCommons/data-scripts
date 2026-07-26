@@ -17,6 +17,9 @@ import type { Changemaker, ChangemakerBundle, Source } from '@pdc/sdk';
 
 const CN_SHORT_CODE = 'charitynav';
 const JSON_SPACES = 2;
+// Fixed page size for Charity Navigator GraphQL requests; a positive
+// constant keeps perPage valid when the EIN list is empty (GLM-5.2).
+const PER_PAGE = 100;
 
 interface NonprofitPublic {
   ein: string;
@@ -55,9 +58,8 @@ interface NonprofitsPublicResponse {
 }
 
 interface NonprofitsPublicVariables {
-  perPage?: number;
-  page?: number;
-  resultSize?: number;
+  page: number;
+  perPage: number;
   filter: {
     ein: {
       in: string[];
@@ -66,8 +68,8 @@ interface NonprofitsPublicVariables {
 }
 
 const QueryNonprofitsPublic: TypedDocumentNode<NonprofitsPublicResponse, NonprofitsPublicVariables> = gql`
-  query NonprofitsPublic($perPage: Int!, $filter: NonprofitFilters) {
-    nonprofitsPublic(filter: $filter) {
+  query NonprofitsPublic($page: Int!, $perPage: Int!, $filter: NonprofitFilters) {
+    nonprofitsPublic(filter: $filter, page: $page, perPage: $perPage) {
       edges {
         ein
         name
@@ -124,26 +126,78 @@ function apolloInit(apiUrl: string, apiKey: string): ApolloClient {
 }
 const API_URL = 'https://api.charitynavigator.org/graphql';
 
+const fetchAllPages = async (
+  fetchPage: (page: number) => Promise<{ edges: NonprofitPublic[]; pageInfo: PageInfo }>,
+): Promise<{ edges: NonprofitPublic[]; pageInfo: PageInfo }> => {
+  const allEdges: NonprofitPublic[] = [];
+  /* eslint-disable no-await-in-loop -- page-based pagination without cursors
+  requires sequential awaited requests (GLM-5.2). */
+  for (let page = 1; ; page += 1) {
+    const { edges, pageInfo } = await fetchPage(page);
+    // The PageInfo.totalPages type is `number`, but the GraphQL response is
+    // untyped at runtime: a null/undefined/non-integer totalPages would either
+    // loop forever (undefined compares as NaN) or stop after page 1 (null
+    // coerces to 0), silently importing a partial result. Reject it loudly
+    // instead (GLM-5.2).
+    if (!Number.isInteger(pageInfo.totalPages) || pageInfo.totalPages < 1) {
+      throw new Error(
+        `Charity Navigator returned an invalid totalPages value (${JSON.stringify(pageInfo.totalPages)}) on page ${page}; expected a positive integer`,
+      );
+    }
+    allEdges.push(...edges);
+    if (page >= pageInfo.totalPages) {
+      return { edges: allEdges, pageInfo };
+    }
+  }
+  /* eslint-enable no-await-in-loop */
+};
+
+const extractPageFromResponse = (
+  response: { data?: NonprofitsPublicResponse | null },
+  page: number,
+): { edges: NonprofitPublic[]; pageInfo: PageInfo } => {
+  const { data } = response;
+  // Apollo types `data` as the parsed payload, but at runtime a partial or
+  // errored response can carry null/undefined data. Destructuring either would
+  // throw a cryptic TypeError; throw a clear error instead so a malformed page
+  // is never mistaken for a complete lookup (GLM-5.2).
+  if (data === undefined || data === null) {
+    throw new Error(`Charity Navigator GraphQL query returned no data on page ${page}`);
+  }
+  return data.nonprofitsPublic;
+};
+
 const getCharityNavigatorProfiles = async (
   apiKey: string,
   eins: string[],
-): Promise<ApolloClient.QueryResult<NonprofitsPublicResponse>> => {
+): Promise<{ data: NonprofitsPublicResponse }> => {
   logger.info(`Looking up EINs ${JSON.stringify(eins)} in Charity Navigator GraphQL API`);
   const apollo = apolloInit(API_URL, apiKey);
-  const variables = {
-    filter: {
-      ein: {
-        in: eins,
+  const { edges, pageInfo } = await fetchAllPages(async (page) => {
+    const variables: NonprofitsPublicVariables = {
+      filter: {
+        ein: {
+          in: eins,
+        },
+      },
+      page,
+      perPage: PER_PAGE,
+    };
+    logger.info(`Fetching charity navigator data for ${JSON.stringify(eins)} using vars ${JSON.stringify(variables)}`);
+    const response = await apollo.query({
+      query: QueryNonprofitsPublic,
+      variables,
+    });
+    return extractPageFromResponse(response, page);
+  });
+  return {
+    data: {
+      nonprofitsPublic: {
+        edges,
+        pageInfo,
       },
     },
-    page: 1,
-    resultSize: eins.length,
   };
-  logger.info(`Fetching charity navigator data for ${JSON.stringify(eins)} using vars ${JSON.stringify(variables)}`);
-  return await apollo.query({
-    query: QueryNonprofitsPublic,
-    variables,
-  });
 };
 
 interface LookupCommandArgs {
@@ -282,10 +336,6 @@ const lookupFromPdcCommand: CommandModule<unknown, LookupFromPdcCommandArgs> = {
     }
     logger.info(validEins, 'Found these valid EINs which will be requested from Charity Navigator');
     const charityNavResponse = await getCharityNavigatorProfiles(apiKey, validEins);
-    if (charityNavResponse.data === undefined) {
-      logger.warn('No data found');
-      return;
-    }
     if (args.outputFile === undefined || args.outputFile === '') {
       logger.info({ charityNavResponse }, 'CharityNavigator result');
       const {
@@ -359,10 +409,6 @@ const updateAllCommand: CommandModule<unknown, UpdateAllCommandArgs> = {
     logger.info({ charityNavResponse }, 'CharityNavigator result');
     // Up to this point we didn't need PDC authentication. Now we do.
     const token = await getToken(args.oidcBaseUrl, args.oidcClientId, args.oidcClientSecret);
-    if (charityNavResponse.data === undefined) {
-      logger.warn('No data found');
-      return;
-    }
     // First, find the existing source. As of this writing, it cannot be created by non-admins.
     const source = await getOrCreateSource(args.pdcApiBaseUrl, token);
     logger.info(source, 'The PDC Source for Charity Navigator was found');
@@ -415,4 +461,4 @@ const charityNavigator: CommandModule = {
   /* eslint-disable-next-line @typescript-eslint/no-empty-function -- yargs demandCommand handles routing to subcommands */
   handler: () => {},
 };
-export { charityNavigator };
+export { charityNavigator, extractPageFromResponse, fetchAllPages };
