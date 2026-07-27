@@ -31,7 +31,7 @@
     "@pdc/sdk": "^0.41.1",
     "@tsconfig/node24": "^24.0.4",
     "@types/jest": "^30.0.0",
-    "@types/node": "^24.12.2",
+    "@types/node": "^26.1.2",
     "@types/yargs": "^17.0.32",
     "eslint": "^9.39.4",
     "eslint-config-love": "^154.0.0",
