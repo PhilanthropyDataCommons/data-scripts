@@ -2,6 +2,7 @@ import { writeFile } from 'node:fs/promises';
 import { ApolloClient, InMemoryCache, type TypedDocumentNode, gql } from '@apollo/client';
 import { SetContextLink } from '@apollo/client/link/context';
 import { HttpLink } from '@apollo/client/link/http';
+import { AxiosError } from 'axios';
 import { isValidEin } from './ein.js';
 import { logger } from './logger.js';
 import { type AccessTokenSet, getToken, oidcOptions } from './oidc.js';
@@ -11,6 +12,7 @@ import {
   postChangemakerFieldValue,
   postChangemakerFieldValueBatch,
   postSource,
+  type WritableChangemakerFieldValue,
 } from './pdc-api.js';
 import type { CommandModule } from 'yargs';
 import type { Changemaker, ChangemakerBundle, Source } from '@pdc/sdk';
@@ -20,6 +22,8 @@ const JSON_SPACES = 2;
 // Fixed page size for Charity Navigator GraphQL requests; a positive
 // constant keeps perPage valid when the EIN list is empty (GLM-5.2).
 const PER_PAGE = 100;
+// When `@pdc/http-status-codes` is ready (issues 18-20 solved), use it instead.
+const HTTP_STATUS_FORBIDDEN = 403;
 
 interface NonprofitPublic {
   ein: string;
@@ -288,6 +292,26 @@ const getChangemakerByEin = (ein: string, changemakers: ChangemakerBundle): Chan
   throw new Error('How could this have happened?');
 };
 
+/** Light wrapper around `postChangemakerFieldValue` that logs warning on HTTP 403 */
+const postChangemakerFieldValueWarnOnForbidden = async (
+  baseUrl: string,
+  token: AccessTokenSet,
+  data: WritableChangemakerFieldValue,
+  warnedChangemakers: Set<number>, // Mutated! This is for observation/logs, not control!
+): Promise<void> => {
+  try {
+    const fieldValue = await postChangemakerFieldValue(baseUrl, token, data);
+    logger.info(`Added changemaker field value: ${JSON.stringify(fieldValue)}`);
+  } catch (e: unknown) {
+    if (e instanceof AxiosError && e.status === HTTP_STATUS_FORBIDDEN) {
+      logger.warn(`No permission (403) to create ${JSON.stringify(data)}`);
+      warnedChangemakers.add(data.changemakerId);
+    } else {
+      throw e;
+    }
+  }
+};
+
 const lookupFromPdcCommand: CommandModule<unknown, LookupFromPdcCommandArgs> = {
   command: 'lookupFromPdc',
   describe: 'Fetch and display information about organizations present in PDC',
@@ -425,6 +449,7 @@ const updateAllCommand: CommandModule<unknown, UpdateAllCommandArgs> = {
       sourceId: source.id,
       notes: `data-scripts charityNavigator.ts execution ${Date.now()}`,
     });
+    const missingPermissionChangemakerIds: Set<number> = new Set<number>();
     // Last, for each nonprofit, for each field, post the field. These are
     // issued sequentially rather than via Promise.all because the PDC API
     // times out under concurrent POSTs to /changemakerFieldValues.
@@ -438,19 +463,29 @@ const updateAllCommand: CommandModule<unknown, UpdateAllCommandArgs> = {
           /* eslint-disable-next-line @typescript-eslint/no-unnecessary-condition --
           The cnAttribute can really be null even though types say otherwise. */
           if (cnAttribute !== undefined && cnAttribute !== null) {
-            const fieldValue = await postChangemakerFieldValue(args.pdcApiBaseUrl, token, {
+            const fieldValue = {
               changemakerId: changemaker.id,
               batchId: fieldBatch.id,
               baseFieldShortCode,
               value: cnAttribute.toString(),
               goodAsOf: e.updatedAt,
-            });
-            logger.info(`Added changemaker field value: ${JSON.stringify(fieldValue)}`);
+            };
+            await postChangemakerFieldValueWarnOnForbidden(
+              args.pdcApiBaseUrl,
+              token,
+              fieldValue,
+              missingPermissionChangemakerIds,
+            );
           }
         }
       }
     }
     /* eslint-enable no-await-in-loop */
+    if (missingPermissionChangemakerIds.size > 0) {
+      logger.warn(
+        `No permission for at least one field in each of these changemakers (so not updated): ${JSON.stringify([...missingPermissionChangemakerIds])}`,
+      );
+    }
   },
 };
 
