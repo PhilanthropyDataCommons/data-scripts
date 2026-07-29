@@ -133,6 +133,7 @@ const postPlatformProviderData = async (
 export {
   type ChangemakerFieldValue,
   type ChangemakerFieldValueBatch,
+  type WritableChangemakerFieldValue,
   getBaseFields,
   getChangemakers,
   getProposals,
