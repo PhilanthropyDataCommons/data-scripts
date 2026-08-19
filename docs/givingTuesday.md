@@ -10,11 +10,11 @@
 
 `givingTuesday.ts` defines a [yargs](https://yargs.js.org/) command module (`givingTuesday`) registered in [`src/index.ts`](src/index.ts) as part of the `data-scripts` CLI. It exposes three subcommands:
 
-| Subcommand | Purpose | Writes to PDC? | Needs PDC auth? |
-|---|---|---|---|
-| `lookup` | Fetch GivingTuesday BMF data for an explicit list of EINs and print or save it | No | No |
-| `lookupFromPdc` | Pull all changemaker EINs from PDC, look them up in GivingTuesday, print/save the result (dry-run style) | No | No (reads PDC anonymously) |
-| `updateAll` | Full sync: read PDC changemakers → look up in GivingTuesday → write results back into PDC as field values | **Yes** | **Yes (OIDC)** |
+| Subcommand      | Purpose                                                                                                   | Writes to PDC? | Needs PDC auth?            |
+| --------------- | --------------------------------------------------------------------------------------------------------- | -------------- | -------------------------- |
+| `lookup`        | Fetch GivingTuesday BMF data for an explicit list of EINs and print or save it                            | No             | No                         |
+| `lookupFromPdc` | Pull all changemaker EINs from PDC, look them up in GivingTuesday, print/save the result (dry-run style)  | No             | No (reads PDC anonymously) |
+| `updateAll`     | Full sync: read PDC changemakers → look up in GivingTuesday → write results back into PDC as field values | **Yes**        | **Yes (OIDC)**             |
 
 Invocation examples:
 
@@ -26,20 +26,22 @@ data-scripts givingTuesday lookup --eins 84-2929872
 data-scripts givingTuesday updateAll --pdc-api-base-url <url> --oidc-base-url <url> --oidc-client-id <id> --oidc-client-secret <secret>
 ```
 
-> Unlike the Charity Navigator integration, the GivingTuesday API is **open-access and unauthenticated** — no API key is required for the source system. Authentication (OIDC) is only needed to *write* into PDC via `updateAll`.
+> Unlike the Charity Navigator integration, the GivingTuesday API is **open-access and unauthenticated** — no API key is required for the source system. Authentication (OIDC) is only needed to _write_ into PDC via `updateAll`.
 
 ---
 
 ## 2. External Systems
 
 ### GivingTuesday 990 Data API (source)
+
 - **Base URL:** `https://990-infrastructure.gtdata.org` (constant `API_BASE_URL`)
-- **Endpoint:** `/irs-data/bmf` (constant `BMF_PATH`) — the IRS Business Master File. *(Code comment notes the published docs render `/irs_data/` but the live API uses the hyphenated `/irs-data/` path.)*
+- **Endpoint:** `/irs-data/bmf` (constant `BMF_PATH`) — the IRS Business Master File. _(Code comment notes the published docs render `/irs_data/` but the live API uses the hyphenated `/irs-data/` path.)_
 - **Client:** the shared Axios `client` ([`src/client.ts`](src/client.ts)) — plain REST GET, **one request per EIN**, passed as a `?ein=` query parameter
 - **Auth:** none (open-access)
 - **Rate limit:** 300 requests / 5 minutes (~1/sec). The code sleeps `RATE_LIMIT_DELAY_MS = 1100` ms between requests rather than implementing 429 backoff (matching the Candid approach).
 
 ### PDC API (destination)
+
 - **Client:** Axios wrapper in [`src/pdc-api.ts`](src/pdc-api.ts) / [`src/client.ts`](src/client.ts)
 - **Auth:** OIDC `client_credentials` grant via [`src/oidc.ts`](src/oidc.ts) (`getToken`). Only `updateAll` authenticates; reads of `/changemakers` are anonymous.
 - **Relevant endpoints:**
@@ -89,7 +91,7 @@ For each BMF record:
 ### Key processing details
 
 - **EIN normalization (`toGivingTuesdayEin`):** GivingTuesday requires **zero-padded, 9-digit, hyphen-free** EINs. The helper strips a hyphen and left-pads to 9 characters (`ein.replace('-', '').padStart(9, '0')`). This same normalization is applied on both sides of the match in `getChangemakerByEin`, so PDC tax IDs and the EINs GivingTuesday echoes back compare correctly.
-- **EIN validation:** `isValidEin` ([`src/ein.ts`](src/ein.ts)) accepts `^\d{2}-?\d{7}$`. Invalid EINs are logged and skipped; valid ones proceed. (Note: unlike Charity Navigator, hyphens are *not* stripped before validation — validation runs on the raw `taxId`, and normalization happens later per-request.)
+- **EIN validation:** `isValidEin` ([`src/ein.ts`](src/ein.ts)) accepts `^\d{2}-?\d{7}$`. Invalid EINs are logged and skipped; valid ones proceed. (Note: unlike Charity Navigator, hyphens are _not_ stripped before validation — validation runs on the raw `taxId`, and normalization happens later per-request.)
 - **EIN → changemaker matching:** `getChangemakerByEin` returns a changemaker only when **exactly one** matches. Zero → logged at info and skipped; more than one → warning and skipped (ambiguous, nothing written).
 - **One request per EIN:** Unlike Charity Navigator's single paginated GraphQL query filtered by a set of EINs, GivingTuesday is queried **individually per EIN**. `getGivingTuesdayProfiles` loops sequentially, sleeping between calls.
 - **Per-EIN fault tolerance:** A failure for one EIN is caught, logged via `logger.error`, and skipped so a single bad lookup doesn't abort the whole run.
@@ -109,32 +111,32 @@ The mapping is defined by the `baseFieldMap` constant in [`src/givingTuesday.ts:
 
 ### 4.1 Fields written to PDC
 
-| GivingTuesday BMF attribute (`BmfRecord`) | PDC base field short code |
-|---|---|
-| `primary_name_of_organization` | `organization_irs_name` |
-| `street_address` | `organization_irs_address` |
-| `city` | `organization_irs_city` |
-| `state` | `organization_irs_state` |
-| `zip_code` | `organization_irs_zip` |
-| `subsection_descrip` | `organization_irs_subsection` |
-| `classification_codes` | `organization_irs_classification` |
-| `foundation_descrip` | `organization_irs_foundation_information` |
-| `foundation_code` | `organization_foundation_code` |
-| `national_taxonomy_of_exempt_entities_ntee_code` | `organization_ntee_code` |
-| `deductibility_code` | `organization_deductibility_code` |
-| `deductability_descrip` | `organization_deductibility_status` |
-| `ruling_date` | `organization_ruling_date` |
-| `tax_period` | `organization_tax_period` |
+| GivingTuesday BMF attribute (`BmfRecord`)        | PDC base field short code                 |
+| ------------------------------------------------ | ----------------------------------------- |
+| `primary_name_of_organization`                   | `organization_irs_name`                   |
+| `street_address`                                 | `organization_irs_address`                |
+| `city`                                           | `organization_irs_city`                   |
+| `state`                                          | `organization_irs_state`                  |
+| `zip_code`                                       | `organization_irs_zip`                    |
+| `subsection_descrip`                             | `organization_irs_subsection`             |
+| `classification_codes`                           | `organization_irs_classification`         |
+| `foundation_descrip`                             | `organization_irs_foundation_information` |
+| `foundation_code`                                | `organization_foundation_code`            |
+| `national_taxonomy_of_exempt_entities_ntee_code` | `organization_ntee_code`                  |
+| `deductibility_code`                             | `organization_deductibility_code`         |
+| `deductability_descrip`                          | `organization_deductibility_status`       |
+| `ruling_date`                                    | `organization_ruling_date`                |
+| `tax_period`                                     | `organization_tax_period`                 |
 
 Each written value becomes a **`ChangemakerFieldValue`** with this shape:
 
-| PDC field value property | Value / source |
-|---|---|
-| `changemakerId` | Resolved via `getChangemakerByEin` (normalized EIN match) |
-| `batchId` | ID of the batch opened for this run |
-| `baseFieldShortCode` | From the mapping table above |
-| `value` | The BMF attribute, coerced with `.toString()` |
-| `goodAsOf` | Derived from `Date_Released` via `parseGivingTuesdayDate` (ISO date or `null`) |
+| PDC field value property | Value / source                                                                 |
+| ------------------------ | ------------------------------------------------------------------------------ |
+| `changemakerId`          | Resolved via `getChangemakerByEin` (normalized EIN match)                      |
+| `batchId`                | ID of the batch opened for this run                                            |
+| `baseFieldShortCode`     | From the mapping table above                                                   |
+| `value`                  | The BMF attribute, coerced with `.toString()`                                  |
+| `goodAsOf`               | Derived from `Date_Released` via `parseGivingTuesdayDate` (ISO date or `null`) |
 
 ### 4.2 EIN — used for matching, not stored as a field
 
@@ -144,10 +146,10 @@ Each written value becomes a **`ChangemakerFieldValue`** with this shape:
 
 The `BmfRecord` interface declares a few attributes that are **not** in `baseFieldMap` and are therefore never written to PDC (though they appear in the raw output of `lookup`/`lookupFromPdc` when `--output-file` is used):
 
-| BMF attribute | Currently imported? |
-|---|---|
-| `Date_Released` | Not a field value, but reused as `goodAsOf` on every written field |
-| `Date_Processed` | No |
+| BMF attribute    | Currently imported?                                                |
+| ---------------- | ------------------------------------------------------------------ |
+| `Date_Released`  | Not a field value, but reused as `goodAsOf` on every written field |
+| `Date_Processed` | No                                                                 |
 
 > Note: the IRS BMF endpoint may return additional attributes beyond those declared on `BmfRecord`; only the fields explicitly listed in `baseFieldMap` are ever written to PDC.
 
@@ -156,14 +158,17 @@ The `BmfRecord` interface declares a few attributes that are **not** in `baseFie
 ## 5. Command Reference
 
 ### `lookup`
+
 - **Args:** `--eins` (array, validated by `isValidEin`), `--output-file`/`--write` (optional).
 - **Behavior:** Calls `getGivingTuesdayProfiles` for the given EINs (one rate-limited request each). Writes JSON to the output file if given, otherwise logs the result. No PDC interaction. No API key required.
 
 ### `lookupFromPdc`
+
 - **Args:** `--pdc-api-base-url` (required), `--output-file`.
 - **Behavior:** Reads all PDC changemakers, extracts + validates their EINs, looks each up in GivingTuesday. If no output file, logs which changemaker IDs were found in GivingTuesday; otherwise writes the raw response to file. **Read-only** with respect to PDC.
 
 ### `updateAll`
+
 - **Args:** `--pdc-api-base-url` (required) and all `oidcOptions` (`--oidc-base-url`, `--oidc-client-id`, `--oidc-client-secret`, all required).
 - **Behavior:** The full sync described in Section 3. The only subcommand that writes to PDC.
 
@@ -171,20 +176,20 @@ The `BmfRecord` interface declares a few attributes that are **not** in `baseFie
 
 ## 6. Error Handling & Resilience Summary
 
-| Concern | Handling |
-|---|---|
-| Invalid EINs in PDC | Filtered out and logged as a warning; valid EINs still processed |
-| Rate limiting | 1100 ms sleep between per-EIN requests (no 429 backoff logic) |
-| Per-EIN request failure | Caught, logged, and skipped — the run continues |
-| Null/undefined or malformed response | `extractResultsFromResponse` throws a clear, EIN-tagged error |
-| Untyped results | `isBmfRecord` runtime type guard (requires string `ein` + org name) |
-| Ambiguous EIN → changemaker (>1 match) | Skipped with a warning; nothing written |
-| Null / undefined / empty-string attributes | Skipped (not posted) |
-| Unparseable / missing `Date_Released` | `goodAsOf` set to `null` |
-| Numeric-or-string IRS codes | Coerced via `.toString()` before posting |
-| HTTP 403 on write | Warned + changemakerId recorded; run continues; summary warning at end |
-| PDC concurrency timeouts | Field values POSTed sequentially |
-| Missing GivingTuesday source | Attempt to create (usually admin-only); warns it may fail |
+| Concern                                    | Handling                                                               |
+| ------------------------------------------ | ---------------------------------------------------------------------- |
+| Invalid EINs in PDC                        | Filtered out and logged as a warning; valid EINs still processed       |
+| Rate limiting                              | 1100 ms sleep between per-EIN requests (no 429 backoff logic)          |
+| Per-EIN request failure                    | Caught, logged, and skipped — the run continues                        |
+| Null/undefined or malformed response       | `extractResultsFromResponse` throws a clear, EIN-tagged error          |
+| Untyped results                            | `isBmfRecord` runtime type guard (requires string `ein` + org name)    |
+| Ambiguous EIN → changemaker (>1 match)     | Skipped with a warning; nothing written                                |
+| Null / undefined / empty-string attributes | Skipped (not posted)                                                   |
+| Unparseable / missing `Date_Released`      | `goodAsOf` set to `null`                                               |
+| Numeric-or-string IRS codes                | Coerced via `.toString()` before posting                               |
+| HTTP 403 on write                          | Warned + changemakerId recorded; run continues; summary warning at end |
+| PDC concurrency timeouts                   | Field values POSTed sequentially                                       |
+| Missing GivingTuesday source               | Attempt to create (usually admin-only); warns it may fail              |
 
 ---
 
@@ -216,13 +221,13 @@ The network-facing functions (`getGivingTuesdayBmfRecords`, `getGivingTuesdayPro
 
 The two scripts share an almost identical architecture (three subcommands, source resolution, batch + sequential field posting, 403 tolerance, EIN → changemaker matching). Key differences:
 
-| Aspect | Charity Navigator | GivingTuesday |
-|---|---|---|
-| Source protocol | GraphQL (Apollo) | REST (Axios GET) |
-| Source auth | Bearer API key required | None (open-access) |
-| Query strategy | One paginated query filtered by a set of EINs | One request **per EIN** |
-| Rate limiting | None | 1100 ms sleep between requests |
-| EIN normalization | Strip hyphen | Strip hyphen **+ zero-pad to 9 digits** |
-| `goodAsOf` source | `updatedAt` (as-is) | `Date_Released` parsed `YYYY_MM_DD` → ISO |
-| Empty-value skip | `undefined` / `null` | `undefined` / `null` / `''` |
-| Fields mapped to PDC | 4 (name, website, phone, mission) | 14 (IRS BMF address, codes, dates, etc.) |
+| Aspect               | Charity Navigator                             | GivingTuesday                             |
+| -------------------- | --------------------------------------------- | ----------------------------------------- |
+| Source protocol      | GraphQL (Apollo)                              | REST (Axios GET)                          |
+| Source auth          | Bearer API key required                       | None (open-access)                        |
+| Query strategy       | One paginated query filtered by a set of EINs | One request **per EIN**                   |
+| Rate limiting        | None                                          | 1100 ms sleep between requests            |
+| EIN normalization    | Strip hyphen                                  | Strip hyphen **+ zero-pad to 9 digits**   |
+| `goodAsOf` source    | `updatedAt` (as-is)                           | `Date_Released` parsed `YYYY_MM_DD` → ISO |
+| Empty-value skip     | `undefined` / `null`                          | `undefined` / `null` / `''`               |
+| Fields mapped to PDC | 4 (name, website, phone, mission)             | 14 (IRS BMF address, codes, dates, etc.)  |
