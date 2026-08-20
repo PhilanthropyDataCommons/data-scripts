@@ -21,7 +21,7 @@ const DEFAULT_OIDC_BASE_URL = 'https://auth.philanthropydatacommons.org/realms/p
 // registered in Keycloak. If it does not, either register one (a one-time admin
 // task) or skip the browser flow entirely by passing `--access-token` / setting
 // DS_ACCESS_TOKEN. See src/getMetrics-report.md for details.
-const DEFAULT_OIDC_CLIENT_ID = 'pdc-bulk-uploader';
+const DEFAULT_OIDC_CLIENT_ID = 'pdc-metrics';
 const DEFAULT_CALLBACK_PORT = 9736;
 const CALLBACK_PATH = '/callback';
 // How long to wait for the caller to complete the browser login before giving up.
