@@ -249,7 +249,7 @@ Requests are issued **sequentially** (a `for … of` loop, not `Promise.all`), m
 | --------------------------- | ----------------------------------------------------- | ------------------------------------------------------------------------------------ |
 | `--pdc-api-base-url`        | `https://api.philanthropydatacommons.org/`            | Which PDC instance to query                                                          |
 | `--oidc-base-url`           | `https://auth.philanthropydatacommons.org/realms/pdc` | Keycloak realm for the browser login                                                 |
-| `--oidc-client-id`          | `pdc-metrics`                                   | Client used for the browser login or client-credentials grant                        |
+| `--oidc-client-id`          | `pdc-metrics`                                         | Client used for the browser login or client-credentials grant                        |
 | `--oidc-client-secret`      | —                                                     | Secret for a non-interactive client-credentials login (env: `DS_OIDC_CLIENT_SECRET`) |
 | `--format`                  | `table`                                               | Output format: `table`, `csv`, or `json`                                             |
 | `--callback-port`           | `9736`                                                | Local port for the OAuth loopback listener                                           |
