@@ -14,13 +14,13 @@ import type { CommandModule } from 'yargs';
 
 const DEFAULT_PDC_API_BASE_URL = 'https://api.philanthropydatacommons.org/';
 const DEFAULT_OIDC_BASE_URL = 'https://auth.philanthropydatacommons.org/realms/pdc';
-// The PDC web application ("bulk uploader") is a public OIDC client. It is used
+// The PDC web application ("pdc metrics") is a public OIDC client. It is used
 // here as the default for the interactive authorization-code flow. NOTE: for
 // the browser flow to succeed, this client (or whichever `--oidc-client-id` you
 // pass) MUST have the loopback redirect URI `http://localhost:<port>/callback`
 // registered in Keycloak. If it does not, either register one (a one-time admin
 // task) or skip the browser flow entirely by passing `--access-token` / setting
-// DS_ACCESS_TOKEN. See src/getMetrics-report.md for details.
+// DS_ACCESS_TOKEN. See docs/getMetrics-report.md for details.
 const DEFAULT_OIDC_CLIENT_ID = 'pdc-metrics';
 const DEFAULT_CALLBACK_PORT = 9736;
 const CALLBACK_PATH = '/callback';

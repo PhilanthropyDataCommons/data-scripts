@@ -1,6 +1,6 @@
 # GivingTuesday Integration — Technical Report
 
-**Source file:** [`src/givingTuesday.ts`](src/givingTuesday.ts)
+**Source file:** [`../src/givingTuesday.ts`](../src/givingTuesday.ts)
 **Generated:** 2026-08-06
 **Purpose:** Fetch IRS Business Master File (BMF) nonprofit data from the GivingTuesday 990 Data API and import it into the Philanthropy Data Commons (PDC) as changemaker field values.
 
@@ -8,7 +8,7 @@
 
 ## 1. Overview
 
-`givingTuesday.ts` defines a [yargs](https://yargs.js.org/) command module (`givingTuesday`) registered in [`src/index.ts`](src/index.ts) as part of the `data-scripts` CLI. It exposes three subcommands:
+`givingTuesday.ts` defines a [yargs](https://yargs.js.org/) command module (`givingTuesday`) registered in [`../src/index.ts`](../src/index.ts) as part of the `data-scripts` CLI. It exposes three subcommands:
 
 | Subcommand      | Purpose                                                                                                   | Writes to PDC? | Needs PDC auth?            |
 | --------------- | --------------------------------------------------------------------------------------------------------- | -------------- | -------------------------- |
@@ -36,14 +36,14 @@ data-scripts givingTuesday updateAll --pdc-api-base-url <url> --oidc-base-url <u
 
 - **Base URL:** `https://990-infrastructure.gtdata.org` (constant `API_BASE_URL`)
 - **Endpoint:** `/irs-data/bmf` (constant `BMF_PATH`) — the IRS Business Master File. _(Code comment notes the published docs render `/irs_data/` but the live API uses the hyphenated `/irs-data/` path.)_
-- **Client:** the shared Axios `client` ([`src/client.ts`](src/client.ts)) — plain REST GET, **one request per EIN**, passed as a `?ein=` query parameter
+- **Client:** the shared Axios `client` ([`../src/client.ts`](../src/client.ts)) — plain REST GET, **one request per EIN**, passed as a `?ein=` query parameter
 - **Auth:** none (open-access)
 - **Rate limit:** 300 requests / 5 minutes (~1/sec). The code sleeps `RATE_LIMIT_DELAY_MS = 1100` ms between requests rather than implementing 429 backoff (matching the Candid approach).
 
 ### PDC API (destination)
 
-- **Client:** Axios wrapper in [`src/pdc-api.ts`](src/pdc-api.ts) / [`src/client.ts`](src/client.ts)
-- **Auth:** OIDC `client_credentials` grant via [`src/oidc.ts`](src/oidc.ts) (`getToken`). Only `updateAll` authenticates; reads of `/changemakers` are anonymous.
+- **Client:** Axios wrapper in [`../src/pdc-api.ts`](../src/pdc-api.ts) / [`../src/client.ts`](../src/client.ts)
+- **Auth:** OIDC `client_credentials` grant via [`../src/oidc.ts`](../src/oidc.ts) (`getToken`). Only `updateAll` authenticates; reads of `/changemakers` are anonymous.
 - **Relevant endpoints:**
   - `GET /changemakers` — list all changemakers (shallow, anonymous)
   - `GET /sources` — find the GivingTuesday source
@@ -91,7 +91,7 @@ For each BMF record:
 ### Key processing details
 
 - **EIN normalization (`toGivingTuesdayEin`):** GivingTuesday requires **zero-padded, 9-digit, hyphen-free** EINs. The helper strips a hyphen and left-pads to 9 characters (`ein.replace('-', '').padStart(9, '0')`). This same normalization is applied on both sides of the match in `getChangemakerByEin`, so PDC tax IDs and the EINs GivingTuesday echoes back compare correctly.
-- **EIN validation:** `isValidEin` ([`src/ein.ts`](src/ein.ts)) accepts `^\d{2}-?\d{7}$`. Invalid EINs are logged and skipped; valid ones proceed. (Note: unlike Charity Navigator, hyphens are _not_ stripped before validation — validation runs on the raw `taxId`, and normalization happens later per-request.)
+- **EIN validation:** `isValidEin` ([`../src/ein.ts`](../src/ein.ts)) accepts `^\d{2}-?\d{7}$`. Invalid EINs are logged and skipped; valid ones proceed. (Note: unlike Charity Navigator, hyphens are _not_ stripped before validation — validation runs on the raw `taxId`, and normalization happens later per-request.)
 - **EIN → changemaker matching:** `getChangemakerByEin` returns a changemaker only when **exactly one** matches. Zero → logged at info and skipped; more than one → warning and skipped (ambiguous, nothing written).
 - **One request per EIN:** Unlike Charity Navigator's single paginated GraphQL query filtered by a set of EINs, GivingTuesday is queried **individually per EIN**. `getGivingTuesdayProfiles` loops sequentially, sleeping between calls.
 - **Per-EIN fault tolerance:** A failure for one EIN is caught, logged via `logger.error`, and skipped so a single bad lookup doesn't abort the whole run.
@@ -107,7 +107,7 @@ For each BMF record:
 
 ## 4. Field Mapping: GivingTuesday BMF → PDC
 
-The mapping is defined by the `baseFieldMap` constant in [`src/givingTuesday.ts:67`](src/givingTuesday.ts). Each GivingTuesday `BmfRecord` attribute is written to a PDC **base field** identified by its short code. This is a substantially richer mapping than the Charity Navigator integration (14 fields vs. 4).
+The mapping is defined by the `baseFieldMap` constant in [`../src/givingTuesday.ts:67`](../src/givingTuesday.ts). Each GivingTuesday `BmfRecord` attribute is written to a PDC **base field** identified by its short code. This is a substantially richer mapping than the Charity Navigator integration (14 fields vs. 4).
 
 ### 4.1 Fields written to PDC
 
@@ -195,7 +195,7 @@ The `BmfRecord` interface declares a few attributes that are **not** in `baseFie
 
 ## 7. Testing
 
-Unit tests in [`src/givingTuesday.unit.test.ts`](src/givingTuesday.unit.test.ts) cover the four exported pure helpers:
+Unit tests in [`../src/givingTuesday.unit.test.ts`](../src/givingTuesday.unit.test.ts) cover the four exported pure helpers:
 
 - **`toGivingTuesdayEin`** — strips a hyphen, leaves an already-normalized EIN unchanged, zero-pads a short EIN to nine digits.
 - **`parseGivingTuesdayDate`** — converts zero-padded and single-digit `YYYY_MM_DD` to ISO; returns `null` for `null`/`undefined`/unparseable input.

@@ -1,6 +1,6 @@
 # Charity Navigator Integration — Technical Report
 
-**Source file:** [`src/charityNavigator.ts`](src/charityNavigator.ts)
+**Source file:** [`../src/charityNavigator.ts`](../src/charityNavigator.ts)
 **Generated:** 2026-08-06
 **Purpose:** Fetch nonprofit profile data from the Charity Navigator Premier GraphQL API and import it into the Philanthropy Data Commons (PDC) as changemaker field values.
 
@@ -8,7 +8,7 @@
 
 ## 1. Overview
 
-`charityNavigator.ts` defines a [yargs](https://yargs.js.org/) command module (`charityNavigator`) that is registered in [`src/index.ts`](src/index.ts) as part of the `data-scripts` CLI. It exposes three subcommands:
+`charityNavigator.ts` defines a [yargs](https://yargs.js.org/) command module (`charityNavigator`) that is registered in [`../src/index.ts`](../src/index.ts) as part of the `data-scripts` CLI. It exposes three subcommands:
 
 | Subcommand      | Purpose                                                                                                       | Writes to PDC? | Needs PDC auth?            |
 | --------------- | ------------------------------------------------------------------------------------------------------------- | -------------- | -------------------------- |
@@ -41,8 +41,8 @@ The API key may also be supplied via the `DS_CHARITY_NAVIGATOR_API_KEY` environm
 
 ### PDC API (destination)
 
-- **Client:** Axios wrapper in [`src/pdc-api.ts`](src/pdc-api.ts) / [`src/client.ts`](src/client.ts)
-- **Auth:** OIDC `client_credentials` grant via [`src/oidc.ts`](src/oidc.ts) (`getToken`), producing a Bearer access token. Only `updateAll` authenticates; reads of `/changemakers` are anonymous.
+- **Client:** Axios wrapper in [`../src/pdc-api.ts`](../src/pdc-api.ts) / [`../src/client.ts`](../src/client.ts)
+- **Auth:** OIDC `client_credentials` grant via [`../src/oidc.ts`](../src/oidc.ts) (`getToken`), producing a Bearer access token. Only `updateAll` authenticates; reads of `/changemakers` are anonymous.
 - **Relevant endpoints:**
   - `GET /changemakers` — list all changemakers (shallow, anonymous)
   - `GET /sources` — find the Charity Navigator source
@@ -85,7 +85,7 @@ For each nonprofit:
 
 ### Key processing details
 
-- **EIN normalization:** PDC stores tax IDs possibly with a hyphen (`NN-NNNNNNN`). `isValidEin` ([`src/ein.ts`](src/ein.ts)) accepts `^\d{2}-?\d{7}$`. Before querying Charity Navigator, hyphens are stripped (`e.replace('-', '')`) because the CN API expects unhyphenated EINs. When matching results back to changemakers, `getChangemakerByEin` also strips hyphens from the PDC `taxId` for comparison.
+- **EIN normalization:** PDC stores tax IDs possibly with a hyphen (`NN-NNNNNNN`). `isValidEin` ([`../src/ein.ts`](../src/ein.ts)) accepts `^\d{2}-?\d{7}$`. Before querying Charity Navigator, hyphens are stripped (`e.replace('-', '')`) because the CN API expects unhyphenated EINs. When matching results back to changemakers, `getChangemakerByEin` also strips hyphens from the PDC `taxId` for comparison.
 - **EIN → changemaker matching:** `getChangemakerByEin` returns a changemaker only when **exactly one** matches an EIN. Zero matches → logged at info and skipped; more than one match → logged as a warning and skipped (ambiguous, so nothing is written).
 - **Pagination:** `fetchAllPages` loops page-by-page (starting at page 1, `perPage = 100`) accumulating `edges` until `currentPage >= totalPages`. It **hard-fails** if `totalPages` is not a positive integer (guards against `undefined` → infinite loop, and `null`/`0` → silent partial import). `extractPageFromResponse` throws a clear error if a page returns `null`/`undefined` data instead of throwing a cryptic `TypeError`.
 - **Runtime validation:** GraphQL responses are untyped at runtime. `isNonprofitPublic` verifies that `ein`, `name`, and `updatedAt` are strings before an edge is treated as a valid `NonprofitPublic`.
@@ -97,7 +97,7 @@ For each nonprofit:
 
 ## 4. Field Mapping: Charity Navigator → PDC
 
-The mapping is defined by the `baseFieldMap` constant in [`src/charityNavigator.ts:44`](src/charityNavigator.ts). Each Charity Navigator `NonprofitPublic` attribute is written to a PDC **base field** identified by its short code.
+The mapping is defined by the `baseFieldMap` constant in [`../src/charityNavigator.ts:44`](../src/charityNavigator.ts). Each Charity Navigator `NonprofitPublic` attribute is written to a PDC **base field** identified by its short code.
 
 ### 4.1 Fields actually written to PDC
 
@@ -180,7 +180,7 @@ The GraphQL query requests several attributes that are **not** part of `baseFiel
 
 ## 7. Testing
 
-Unit tests in [`src/charityNavigator.unit.test.ts`](src/charityNavigator.unit.test.ts) cover the two exported helpers:
+Unit tests in [`../src/charityNavigator.unit.test.ts`](../src/charityNavigator.unit.test.ts) cover the two exported helpers:
 
 - **`fetchAllPages`** — accumulates edges across multiple pages, handles a single page, handles an empty first page, and throws on invalid `totalPages` values (`undefined`, `null`, `0`).
 - **`extractPageFromResponse`** — returns `nonprofitsPublic` for valid data and throws clear, page-numbered errors when `data` is `null` or `undefined`.
@@ -194,4 +194,4 @@ The network-facing functions (`getCharityNavigatorProfiles`, the command handler
 - `CN_SHORT_CODE = 'charitynav'` — the PDC data provider short code for Charity Navigator.
 - `PER_PAGE = 100` — fixed GraphQL page size.
 - `HTTP_STATUS_FORBIDDEN = 403` — with a code comment noting that a shared `@pdc/http-status-codes` package should replace this once available.
-- [`src/pdc-api.ts`](src/pdc-api.ts) contains a `TODO` to replace locally-copied `ChangemakerFieldValue*` types with the `@pdc/sdk` equivalents.
+- [`../src/pdc-api.ts`](../src/pdc-api.ts) contains a `TODO` to replace locally-copied `ChangemakerFieldValue*` types with the `@pdc/sdk` equivalents.

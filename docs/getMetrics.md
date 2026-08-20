@@ -38,7 +38,7 @@ npm run getMetrics -- --skip-auth
 
 ### Using `--access-token` (no browser / no Keycloak reconfiguration)
 
-Because the default `pdc-bulk-uploader` client does not allow a loopback redirect (see [§3](#3-authentication-the-interactive-browser-flow)), the quickest way to count the authenticated endpoints today is to supply a bearer token you already have. Any of these work:
+Because the default `pdc-metrics` client does not allow a loopback redirect (see [§3](#3-authentication-the-interactive-browser-flow)), the quickest way to count the authenticated endpoints today is to supply a bearer token you already have. Any of these work:
 
 ```bash
 # 1. Token as a CLI flag
@@ -95,7 +95,7 @@ npm run getMetrics -- --access-token "$(cat token.txt)" --format json --write me
 - **Realm base URL:** `https://auth.philanthropydatacommons.org/realms/pdc` (default; override with `--oidc-base-url`)
 - **Discovery:** OIDC metadata is fetched from the realm's `.well-known/openid-configuration` via `openid-client`'s `Issuer.discover`.
 - **Flow:** OAuth 2.0 **Authorization Code with PKCE** (`S256`), driven through the caller's browser (see [§3](#3-authentication-the-interactive-browser-flow)).
-- **Default client:** `pdc-bulk-uploader` — the public client used by the PDC web application (override with `--oidc-client-id`).
+- **Default client:** `pdc-metrics` — the public client used by the PDC web application (override with `--oidc-client-id`).
 
 ---
 
@@ -134,7 +134,7 @@ If the caller does not finish within `AUTH_TIMEOUT_MS` (5 minutes), the attempt 
 
 The authorization‑code flow redirects to `http://localhost:<callback-port>/callback`. **That exact redirect URI must be registered on the OIDC client in Keycloak**, or Keycloak refuses the request with _"Invalid parameter: redirect_uri"_ and the browser tab never returns to the CLI (the script then times out).
 
-As of this writing the default `pdc-bulk-uploader` client only permits the web app's own origin (`https://app.philanthropydatacommons.org/`) as a redirect, **not** a loopback URL. So the interactive flow works only after one of these one‑time setups:
+As of this writing the default `pdc-metrics` client only permits the web app's own origin (`https://app.philanthropydatacommons.org/`) as a redirect, **not** a loopback URL. So the interactive flow works only after one of these one‑time setups:
 
 - **Preferred:** a PDC Keycloak admin adds `http://localhost/*` (or a specific `http://localhost:9736/callback`) to the valid redirect URIs of a public client, and you point `--oidc-client-id` at it; **or**
 - **No config needed:** skip the browser entirely and pass a token you already have via `--access-token` (or the `DS_ACCESS_TOKEN` environment variable). This is the quickest way to count the auth‑required endpoints today.
@@ -249,7 +249,7 @@ Requests are issued **sequentially** (a `for … of` loop, not `Promise.all`), m
 | --------------------------- | ----------------------------------------------------- | ------------------------------------------------------------------------------------ |
 | `--pdc-api-base-url`        | `https://api.philanthropydatacommons.org/`            | Which PDC instance to query                                                          |
 | `--oidc-base-url`           | `https://auth.philanthropydatacommons.org/realms/pdc` | Keycloak realm for the browser login                                                 |
-| `--oidc-client-id`          | `pdc-bulk-uploader`                                   | Client used for the browser login or client-credentials grant                        |
+| `--oidc-client-id`          | `pdc-metrics`                                   | Client used for the browser login or client-credentials grant                        |
 | `--oidc-client-secret`      | —                                                     | Secret for a non-interactive client-credentials login (env: `DS_OIDC_CLIENT_SECRET`) |
 | `--format`                  | `table`                                               | Output format: `table`, `csv`, or `json`                                             |
 | `--callback-port`           | `9736`                                                | Local port for the OAuth loopback listener                                           |
@@ -322,7 +322,7 @@ The network‑facing functions (`getEndpointCount`, `collectMetrics`) and their 
 ## 11. Notable constants & TODOs
 
 - `PDC_ENDPOINTS` — the editable catalogue of collections to count.
-- `DEFAULT_OIDC_CLIENT_ID = 'pdc-bulk-uploader'` — the PDC web app's public client (see the loopback‑redirect caveat in [§3](#3-authentication-the-interactive-browser-flow)).
+- `DEFAULT_OIDC_CLIENT_ID = 'pdc-metrics'` — the PDC web app's public client (see the loopback‑redirect caveat in [§3](#3-authentication-the-interactive-browser-flow)).
 - `DEFAULT_CALLBACK_PORT = 9736` — local OAuth redirect port.
 - `AUTH_TIMEOUT_MS = 300_000` — browser‑login timeout.
 - `PROBE_PAGE = '1'` / `PROBE_COUNT = '1'` — the cheap single‑item probe.
