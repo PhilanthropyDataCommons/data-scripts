@@ -25,6 +25,8 @@ const sampleMetrics: EndpointMetric[] = [
   },
 ];
 
+const BASE_URL = 'https://api.philanthropydatacommons.org/';
+
 describe('csvField', () => {
   it('leaves a plain value unquoted', () => {
     expect(csvField('Base Fields')).toBe('Base Fields');
@@ -159,46 +161,56 @@ describe('resolveFullCount', () => {
 });
 
 describe('renderCsv', () => {
-  it('starts with the header row', () => {
-    expect(renderCsv(sampleMetrics).split('\n')[0]).toBe('endpoint,label,count,status,note');
+  it('starts with a comment line naming the environment', () => {
+    expect(renderCsv(sampleMetrics, BASE_URL).split('\n')[0]).toBe(`# PDC API base URL: ${BASE_URL}`);
+  });
+
+  it('puts the CSV header row directly after the comment line', () => {
+    expect(renderCsv(sampleMetrics, BASE_URL).split('\n')[1]).toBe('endpoint,label,count,status,note');
   });
 
   it('renders an ok row with its count and an empty note', () => {
-    const lines = renderCsv(sampleMetrics).split('\n');
-    expect(lines[1]).toBe('baseFields,Base Fields,282,ok,');
+    const lines = renderCsv(sampleMetrics, BASE_URL).split('\n');
+    expect(lines[2]).toBe('baseFields,Base Fields,282,ok,');
   });
 
   it('renders a failed row with an empty count field and its note', () => {
-    const lines = renderCsv(sampleMetrics).split('\n');
-    expect(lines[3]).toBe('proposals,Proposals,,unauthorized,Authentication required (no valid token supplied)');
+    const lines = renderCsv(sampleMetrics, BASE_URL).split('\n');
+    expect(lines[4]).toBe('proposals,Proposals,,unauthorized,Authentication required (no valid token supplied)');
   });
 
   it('quotes a note that contains a comma', () => {
     const metrics: EndpointMetric[] = [
       { path: 'files', label: 'Files', count: null, status: 'error', note: 'boom, it broke' },
     ];
-    expect(renderCsv(metrics).split('\n')[1]).toBe('files,Files,,error,"boom, it broke"');
+    expect(renderCsv(metrics, BASE_URL).split('\n')[2]).toBe('files,Files,,error,"boom, it broke"');
   });
 });
 
 describe('renderTable', () => {
-  it('includes a header with all four columns', () => {
-    const [header] = renderTable(sampleMetrics).split('\n');
-    expect(header).toContain('ENDPOINT');
-    expect(header).toContain('COUNT');
-    expect(header).toContain('STATUS');
-    expect(header).toContain('NOTE');
+  it('starts with a header line naming the environment, then a blank line', () => {
+    const lines = renderTable(sampleMetrics, BASE_URL).split('\n');
+    expect(lines[0]).toBe(`PDC API base URL: ${BASE_URL}`);
+    expect(lines[1]).toBe('');
+  });
+
+  it('includes a column header with all four columns', () => {
+    const [, , columnHeader] = renderTable(sampleMetrics, BASE_URL).split('\n');
+    expect(columnHeader).toContain('ENDPOINT');
+    expect(columnHeader).toContain('COUNT');
+    expect(columnHeader).toContain('STATUS');
+    expect(columnHeader).toContain('NOTE');
   });
 
   it('prefixes each endpoint path with a slash and shows its formatted count', () => {
-    const table = renderTable(sampleMetrics);
+    const table = renderTable(sampleMetrics, BASE_URL);
     expect(table).toContain('/baseFields');
     expect(table).toContain('282');
     expect(table).toContain('ok');
   });
 
   it('renders an unavailable endpoint with an em dash and its note', () => {
-    const table = renderTable(sampleMetrics);
+    const table = renderTable(sampleMetrics, BASE_URL);
     expect(table).toContain('/proposals');
     expect(table).toContain('—');
     expect(table).toContain('unauthorized');
@@ -207,7 +219,7 @@ describe('renderTable', () => {
   it('left-pads the count column so values are right-aligned', () => {
     // "282" is width 3 (the widest count once the header "COUNT" is considered),
     // so the single-item "17" must be right-aligned under it.
-    const line = renderTable(sampleMetrics)
+    const line = renderTable(sampleMetrics, BASE_URL)
       .split('\n')
       .find((l) => l.includes('/changemakers'));
     expect(line).toBeDefined();
@@ -216,9 +228,10 @@ describe('renderTable', () => {
 });
 
 describe('renderJson', () => {
-  it('produces valid JSON with summary and metrics', () => {
-    const parsed: unknown = JSON.parse(renderJson(sampleMetrics));
+  it('produces valid JSON with the environment URL, summary, and metrics', () => {
+    const parsed: unknown = JSON.parse(renderJson(sampleMetrics, BASE_URL));
     expect(parsed).toStrictEqual({
+      pdcApiBaseUrl: BASE_URL,
       generatedAt: expect.any(String),
       summary: { endpointCount: 3, okCount: 2, failedCount: 1, itemTotal: 299 },
       metrics: sampleMetrics,

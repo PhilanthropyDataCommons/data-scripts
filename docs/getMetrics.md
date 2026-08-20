@@ -263,19 +263,23 @@ As with all unified `data-scripts`, any option can also be supplied via a `DS_`�
 
 ## 8. Output formats
 
+Every report opens with the **`pdc-api-base-url`** it was run against, so a saved report is self-identifying about its environment (production vs. a test instance). Its placement is format-appropriate: a plain header line for `table`, a leading `#` comment line for `csv`, and a top-level `pdcApiBaseUrl` field for `json`.
+
 In every format the rows are sorted **alphabetically by endpoint path** (`sortMetrics`), regardless of the order the endpoints are fetched in.
 
-- **`table`** (default): a column‑aligned plain‑text table (`ENDPOINT | COUNT | STATUS | NOTE`). Counts are grouped with thousands separators; unavailable endpoints show `—`.
-- **`csv`**: RFC‑4180 CSV with header `endpoint,label,count,status,note`. Fields containing commas, quotes, or newlines are quoted and internal quotes doubled (`csvField`).
-- **`json`**: `{ generatedAt, summary, metrics }`, where `summary` carries `endpointCount`, `okCount`, `failedCount`, and `itemTotal`.
+- **`table`** (default): a header line (`PDC API base URL: <url>`), a blank line, then a column‑aligned plain‑text table (`ENDPOINT | COUNT | STATUS | NOTE`). Counts are grouped with thousands separators; unavailable endpoints show `—`.
+- **`csv`**: a `# PDC API base URL: <url>` comment line, then RFC‑4180 CSV with header `endpoint,label,count,status,note`. Fields containing commas, quotes, or newlines are quoted and internal quotes doubled (`csvField`).
+- **`json`**: `{ pdcApiBaseUrl, generatedAt, summary, metrics }`, where `summary` carries `endpointCount`, `okCount`, `failedCount`, and `itemTotal`.
 
 Example (`--skip-auth --format table`):
 
 ```
+PDC API base URL: https://api.philanthropydatacommons.org/
+
 ENDPOINT                       COUNT  STATUS        NOTE
+/applicationForms                  —  unauthorized  Authentication required (no valid token supplied)
 /baseFields                      282  ok
 /changemakers                     17  ok
-/proposals                         —  unauthorized  Authentication required (no valid token supplied)
 …
 ```
 

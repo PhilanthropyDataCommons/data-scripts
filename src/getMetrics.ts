@@ -364,16 +364,19 @@ const csvField = (value: string): string => (/[",\n\r]/v.test(value) ? `"${value
 
 const CSV_HEADER = ['endpoint', 'label', 'count', 'status', 'note'];
 
-/** Render metrics as RFC-4180 CSV. */
-const renderCsv = (metrics: EndpointMetric[]): string => {
+// Label for the header line that names the environment a report was run against.
+const REPORT_HEADER_LABEL = 'PDC API base URL';
+
+/** Render metrics as RFC-4180 CSV, with a leading `#` comment naming the environment. */
+const renderCsv = (metrics: EndpointMetric[], baseUrl: string): string => {
   const rows = metrics.map((m) =>
     [m.path, m.label, m.count === null ? '' : String(m.count), m.status, m.note].map(csvField).join(','),
   );
-  return [CSV_HEADER.join(','), ...rows].join('\n');
+  return [`# ${REPORT_HEADER_LABEL}: ${baseUrl}`, CSV_HEADER.join(','), ...rows].join('\n');
 };
 
-/** Render metrics as a plain-text, column-aligned table. */
-const renderTable = (metrics: EndpointMetric[]): string => {
+/** Render metrics as a plain-text, column-aligned table, with a header line naming the environment. */
+const renderTable = (metrics: EndpointMetric[], baseUrl: string): string => {
   const header = { endpoint: 'ENDPOINT', count: 'COUNT', status: 'STATUS', note: 'NOTE' };
   const rows = metrics.map((m) => ({
     endpoint: `/${m.path}`,
@@ -388,7 +391,7 @@ const renderTable = (metrics: EndpointMetric[]): string => {
   const statusWidth = width('status');
   const line = (r: (typeof all)[number]): string =>
     `${r.endpoint.padEnd(endpointWidth)}  ${r.count.padStart(countWidth)}  ${r.status.padEnd(statusWidth)}  ${r.note}`.trimEnd();
-  return all.map(line).join('\n');
+  return [`${REPORT_HEADER_LABEL}: ${baseUrl}`, '', ...all.map(line)].join('\n');
 };
 
 /** Summary counters describing a metrics run. */
@@ -409,20 +412,24 @@ const summarize = (metrics: EndpointMetric[]): MetricsSummary => {
   };
 };
 
-/** Render metrics as JSON, including a summary block. */
-const renderJson = (metrics: EndpointMetric[]): string =>
-  JSON.stringify({ generatedAt: new Date().toISOString(), summary: summarize(metrics), metrics }, null, JSON_SPACES);
+/** Render metrics as JSON, including the environment URL and a summary block. */
+const renderJson = (metrics: EndpointMetric[], baseUrl: string): string =>
+  JSON.stringify(
+    { pdcApiBaseUrl: baseUrl, generatedAt: new Date().toISOString(), summary: summarize(metrics), metrics },
+    null,
+    JSON_SPACES,
+  );
 
 type OutputFormat = 'table' | 'csv' | 'json';
 
-const renderReport = (metrics: EndpointMetric[], format: OutputFormat): string => {
+const renderReport = (metrics: EndpointMetric[], format: OutputFormat, baseUrl: string): string => {
   if (format === 'csv') {
-    return renderCsv(metrics);
+    return renderCsv(metrics, baseUrl);
   }
   if (format === 'json') {
-    return renderJson(metrics);
+    return renderJson(metrics, baseUrl);
   }
-  return renderTable(metrics);
+  return renderTable(metrics, baseUrl);
 };
 
 // ---------------------------------------------------------------------------
@@ -531,7 +538,7 @@ const getMetrics: CommandModule<unknown, GetMetricsCommandArgs> = {
     const accessToken = await resolveAccessToken(args);
     const metrics = sortMetrics(await collectMetrics(args.pdcApiBaseUrl, PDC_ENDPOINTS, accessToken));
     const summary = summarize(metrics);
-    const report = renderReport(metrics, args.format);
+    const report = renderReport(metrics, args.format, args.pdcApiBaseUrl);
 
     if (args.outputFile === undefined || args.outputFile === '') {
       logger.info(`PDC metrics report (${args.format}):\n${report}`);
