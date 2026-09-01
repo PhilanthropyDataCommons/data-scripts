@@ -3,6 +3,8 @@ import yargs from 'yargs/yargs';
 import { hideBin } from 'yargs/helpers';
 import { candid } from './candid.js';
 import { charityNavigator } from './charityNavigator.js';
+import { getMetrics } from './getMetrics.js';
+import { givingTuesday } from './givingTuesday.js';
 import { logger } from './logger.js';
 import { getTokenCommand } from './oidc.js';
 
@@ -33,6 +35,8 @@ const main = async (argv: string[]): Promise<void> => {
     .command(getTokenCommand)
     .command(candid)
     .command(charityNavigator)
+    .command(getMetrics)
+    .command(givingTuesday)
     .demandCommand()
     .parse();
 };

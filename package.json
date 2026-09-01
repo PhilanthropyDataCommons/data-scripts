@@ -21,7 +21,9 @@
     "generateBaseFieldsInserts": "node --import ./register.mjs src/generateBaseFieldsInserts.ts",
     "generateApplicationFormJson": "node --import ./register.mjs src/generateApplicationFormJson.ts",
     "postProposalVersions": "node --import ./register.mjs src/postProposalVersions.ts",
-    "charityNavigator": "node --import ./register.mjs src/index.ts charityNavigator"
+    "charityNavigator": "node --import ./register.mjs src/index.ts charityNavigator",
+    "givingTuesday": "node --import ./register.mjs src/index.ts givingTuesday",
+    "getMetrics": "node --import ./register.mjs src/index.ts getMetrics"
   },
   "author": "Open Tech Strategies",
   "license": "AGPL-3.0-or-later",
