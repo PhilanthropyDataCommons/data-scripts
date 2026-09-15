@@ -198,6 +198,7 @@ The list lives in the `PDC_ENDPOINTS` constant and is trivial to edit. It covers
 | `/sources`                      | Sources                         | 🔒 token     |
 | `/dataProviders`                | Data Providers                  | 🔒 token     |
 | `/funders`                      | Funders                         | 🔒 token     |
+| `/initiatives`                  | Initiatives                     | 🔒 token     |
 | `/opportunities`                | Opportunities                   | 🔒 token     |
 | `/users`                        | Users                           | 🔒 token     |
 | `/changemakerFieldValues`       | Changemaker Field Values        | 🔒 token     |

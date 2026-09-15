@@ -77,6 +77,7 @@ const PDC_ENDPOINTS: PdcEndpoint[] = [
   { path: 'sources', label: 'Sources', public: false },
   { path: 'dataProviders', label: 'Data Providers', public: false },
   { path: 'funders', label: 'Funders', public: false },
+  { path: 'initiatives', label: 'Initiatives', public: false },
   { path: 'opportunities', label: 'Opportunities', public: false },
   { path: 'users', label: 'Users', public: false },
   { path: 'changemakerFieldValues', label: 'Changemaker Field Values', public: false },
