@@ -1,7 +1,7 @@
 # Charity Navigator → PDC Field Gap Analysis
 
 **Subject:** [`src/charityNavigator.ts`](src/charityNavigator.ts) field mapping (`baseFieldMap`)
-**Question:** Which Charity Navigator fields are *not* being loaded into PDC, and can any of them be mapped to existing PDC base fields going forward?
+**Question:** Which Charity Navigator fields are _not_ being loaded into PDC, and can any of them be mapped to existing PDC base fields going forward?
 **PDC field catalog source:** live query of `https://api.philanthropydatacommons.org/baseFields` (the same API that backs [philanthropydatacommons.org/base-fields-list](https://philanthropydatacommons.org/base-fields-list/)) — **282 base fields** total, retrieved 2026-08-19.
 **Generated:** 2026-08-19
 
@@ -11,7 +11,7 @@
 
 - The script currently maps **4 of the ~12 fields** it requests from Charity Navigator into PDC.
 - Of the **6 fetched-but-unmapped fields** (`encompassScore`, `encompassStarRating`, `encompassRatingId`, `encompassPublicationDate`, `size`, `cause`), **none map cleanly to an existing PDC base field** — PDC has no organization-level rating, score, size, or cause/sector field today. Importing them would require **new PDC base fields** to be created first.
-- The **larger, actionable opportunity is in fields the query does *not* currently request.** Charity Navigator's public nonprofit type also exposes a **structured postal address** (street, city, state, zip, country) and, on the Premier tier, likely **financial totals**. PDC already has empty, ready-to-fill base fields for both — these are the recommended additions.
+- The **larger, actionable opportunity is in fields the query does _not_ currently request.** Charity Navigator's public nonprofit type also exposes a **structured postal address** (street, city, state, zip, country) and, on the Premier tier, likely **financial totals**. PDC already has empty, ready-to-fill base fields for both — these are the recommended additions.
 - ⚠️ **One verification step is required:** the exact fields available on the API's `NonprofitPublic` type should be confirmed by GraphQL introspection with the API key before extending the query (see §6).
 
 ---
@@ -20,12 +20,12 @@
 
 From `baseFieldMap` in [`src/charityNavigator.ts:44`](src/charityNavigator.ts):
 
-| Charity Navigator attribute | PDC base field short code | PDC category |
-|---|---|---|
-| `name` | `organization_name` | organization |
-| `website` | `organization_website` | organization |
-| `phone` | `organization_phone` | organization |
-| `mission` | `organization_mission_statement` | organization |
+| Charity Navigator attribute | PDC base field short code        | PDC category |
+| --------------------------- | -------------------------------- | ------------ |
+| `name`                      | `organization_name`              | organization |
+| `website`                   | `organization_website`           | organization |
+| `phone`                     | `organization_phone`             | organization |
+| `mission`                   | `organization_mission_statement` | organization |
 
 Plus two fields used but not stored: `ein` (join key) and `updatedAt` (written as each value's `goodAsOf`).
 
@@ -35,14 +35,14 @@ Plus two fields used but not stored: `ein` (join key) and `updatedAt` (written a
 
 These fields are already requested by the `NonprofitsPublic` GraphQL query ([`src/charityNavigator.ts:74`](src/charityNavigator.ts)) but are dropped before writing to PDC.
 
-| CN attribute | What it is | Closest PDC field(s) | Mappable today? |
-|---|---|---|---|
-| `encompassScore` | Encompass numeric rating (0–100) | *none* — `review_average_score` / `review_total_score` exist but are **evaluation-category, proposal-review** fields, not org ratings | ❌ No org-level target |
-| `encompassStarRating` | Star rating (0–4) | *none* | ❌ No org-level target |
-| `encompassRatingId` | Internal CN rating identifier | *none* | ❌ Internal ID, low value |
-| `encompassPublicationDate` | Date the rating was published | *none* (only meaningful alongside a rating field) | ❌ No target |
-| `size` | CN size bucket (revenue-based band) | loosely `organization_operating_budget` — but that is a value, not a band | ❌ Semantics don't match |
-| `cause` | Human-readable cause/category (e.g. "Health") | `organization_ntee_code` is the nearest structured concept, but it is a *code* (and is already filled by GivingTuesday); no `organization_cause`/`sector`/`focus` field exists at org level | ❌ No clean target |
+| CN attribute               | What it is                                    | Closest PDC field(s)                                                                                                                                                                        | Mappable today?           |
+| -------------------------- | --------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------- |
+| `encompassScore`           | Encompass numeric rating (0–100)              | _none_ — `review_average_score` / `review_total_score` exist but are **evaluation-category, proposal-review** fields, not org ratings                                                       | ❌ No org-level target    |
+| `encompassStarRating`      | Star rating (0–4)                             | _none_                                                                                                                                                                                      | ❌ No org-level target    |
+| `encompassRatingId`        | Internal CN rating identifier                 | _none_                                                                                                                                                                                      | ❌ Internal ID, low value |
+| `encompassPublicationDate` | Date the rating was published                 | _none_ (only meaningful alongside a rating field)                                                                                                                                           | ❌ No target              |
+| `size`                     | CN size bucket (revenue-based band)           | loosely `organization_operating_budget` — but that is a value, not a band                                                                                                                   | ❌ Semantics don't match  |
+| `cause`                    | Human-readable cause/category (e.g. "Health") | `organization_ntee_code` is the nearest structured concept, but it is a _code_ (and is already filled by GivingTuesday); no `organization_cause`/`sector`/`focus` field exists at org level | ❌ No clean target        |
 
 **Conclusion:** None of the six can be mapped to an existing PDC base field. The Encompass rating trio (`encompassScore` + `encompassStarRating` + `encompassPublicationDate`) is the most valuable content Charity Navigator uniquely provides, but **PDC currently has nowhere to put it.** To capture it, the team would need to request new base fields — suggested short codes below:
 
@@ -58,31 +58,31 @@ These fields are already requested by the `NonprofitsPublic` GraphQL query ([`sr
 
 Charity Navigator's public nonprofit type exposes more than the 12 fields the current query selects. Per Charity Navigator's own [`cn-examples`](https://github.com/CharityNavigator/cn-examples) query samples, the public nonprofit object also includes a **structured address** and organization URLs. These have **ready, currently-empty PDC targets**:
 
-| CN attribute (available, not queried) | Recommended PDC base field | PDC data type | Notes |
-|---|---|---|---|
-| `street` / `street2` | `organization_street_address_1` / `organization_street_address_2` | string | PDC's general org address (distinct from the IRS address that GivingTuesday fills via `organization_irs_address`) |
-| `city` | `organization_city` | string | |
-| `state` | `organization_state_province` | string | |
-| `zip` | `organization_postal_code` | string | |
-| `country` | `organization_country` | string | |
+| CN attribute (available, not queried) | Recommended PDC base field                                        | PDC data type | Notes                                                                                                             |
+| ------------------------------------- | ----------------------------------------------------------------- | ------------- | ----------------------------------------------------------------------------------------------------------------- |
+| `street` / `street2`                  | `organization_street_address_1` / `organization_street_address_2` | string        | PDC's general org address (distinct from the IRS address that GivingTuesday fills via `organization_irs_address`) |
+| `city`                                | `organization_city`                                               | string        |                                                                                                                   |
+| `state`                               | `organization_state_province`                                     | string        |                                                                                                                   |
+| `zip`                                 | `organization_postal_code`                                        | string        |                                                                                                                   |
+| `country`                             | `organization_country`                                            | string        |                                                                                                                   |
 
-> **No collision with GivingTuesday.** GivingTuesday populates the `organization_irs_*` address family; the fields above are the *general* organization-address family, which is currently unfilled. The two coexist by design.
+> **No collision with GivingTuesday.** GivingTuesday populates the `organization_irs_*` address family; the fields above are the _general_ organization-address family, which is currently unfilled. The two coexist by design.
 
 ### Premier-tier financials (needs schema confirmation — see §6)
 
 PDC has a full set of empty **budget-category** fields ready to receive nonprofit financials. If the Premier `NonprofitPublic` type (or a related type) exposes 990-derived totals, these are direct one-to-one targets:
 
-| Financial concept | PDC base field | PDC data type |
-|---|---|---|
-| Total revenue | `organization_total_revenue` | currency |
-| Total expenses | `organization_total_expenses` | currency |
-| Total assets | `organization_total_assets` | currency |
-| Net assets | `organization_net_assets` | currency |
-| Net income | `organization_net_income` | currency |
-| Total liabilities | `organization_total_liabilities` | currency |
-| Grants paid | `organization_grants_paid` | currency |
+| Financial concept | PDC base field                   | PDC data type |
+| ----------------- | -------------------------------- | ------------- |
+| Total revenue     | `organization_total_revenue`     | currency      |
+| Total expenses    | `organization_total_expenses`    | currency      |
+| Total assets      | `organization_total_assets`      | currency      |
+| Net assets        | `organization_net_assets`        | currency      |
+| Net income        | `organization_net_income`        | currency      |
+| Total liabilities | `organization_total_liabilities` | currency      |
+| Grants paid       | `organization_grants_paid`       | currency      |
 
-I could not confirm from public documentation that CN's *public* type exposes these financial fields (they were not present in the public query samples). This is the one item that must be verified against the live schema before mapping.
+I could not confirm from public documentation that CN's _public_ type exposes these financial fields (they were not present in the public query samples). This is the one item that must be verified against the live schema before mapping.
 
 ### Low-value / no-target extras
 
@@ -143,11 +143,11 @@ That single introspection query will definitively answer (a) the exact address f
 
 ## 7. Bottom line
 
-| Category | Count | Action |
-|---|---|---|
-| Currently mapped | 4 | — |
-| Fetched but unmapped, **no PDC target** | 6 | Request new PDC base fields for the Encompass rating (score/star/date); the rest are low value |
-| **Available in CN, unmapped, PDC target EXISTS** | ~6 address fields | **Add to query + `baseFieldMap` (Phase 1) — recommended** |
-| Available on Premier tier, PDC target exists | up to 7 financial fields | Verify schema, then map (Phase 2) |
+| Category                                         | Count                    | Action                                                                                         |
+| ------------------------------------------------ | ------------------------ | ---------------------------------------------------------------------------------------------- |
+| Currently mapped                                 | 4                        | —                                                                                              |
+| Fetched but unmapped, **no PDC target**          | 6                        | Request new PDC base fields for the Encompass rating (score/star/date); the rest are low value |
+| **Available in CN, unmapped, PDC target EXISTS** | ~6 address fields        | **Add to query + `baseFieldMap` (Phase 1) — recommended**                                      |
+| Available on Premier tier, PDC target exists     | up to 7 financial fields | Verify schema, then map (Phase 2)                                                              |
 
 The single highest-value, lowest-risk change is **importing Charity Navigator's structured address into the existing (empty) PDC organization-address fields.** The Encompass ratings are Charity Navigator's most distinctive data but cannot be stored until PDC adds matching base fields.

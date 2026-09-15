@@ -4,22 +4,22 @@
 
 ## At a glance
 
-| | |
-|---|---|
-| **Source** | Charity Navigator GraphQL API (`NonprofitsPublic`) |
+|                    |                                                                             |
+| ------------------ | --------------------------------------------------------------------------- |
+| **Source**         | Charity Navigator GraphQL API (`NonprofitsPublic`)                          |
 | **Implementation** | [`src/charityNavigator.ts`](../../src/charityNavigator.ts) — `baseFieldMap` |
-| **Join key** | `ein` · freshness from `updatedAt` → `goodAsOf` |
-| **Status** | Live. Maps **4** fields; ~6 more are available and have ready PDC targets |
-| **Blocker** | Exact CN field names need GraphQL introspection before extending the query |
+| **Join key**       | `ein` · freshness from `updatedAt` → `goodAsOf`                             |
+| **Status**         | Live. Maps **4** fields; ~6 more are available and have ready PDC targets   |
+| **Blocker**        | Exact CN field names need GraphQL introspection before extending the query  |
 
 ## Mapped today (4)
 
-| CN attribute | PDC base field |
-|---|---|
-| `name` | `organization_name` |
-| `website` | `organization_website` |
-| `phone` | `organization_phone` |
-| `mission` | `organization_mission_statement` |
+| CN attribute | PDC base field                   |
+| ------------ | -------------------------------- |
+| `name`       | `organization_name`              |
+| `website`    | `organization_website`           |
+| `phone`      | `organization_phone`             |
+| `mission`    | `organization_mission_statement` |
 
 `ein` and `updatedAt` are used but not stored as values.
 
@@ -27,16 +27,16 @@
 
 Requires adding these to the GraphQL query + interface + `baseFieldMap`. No PDC schema change.
 
-| CN attribute | PDC base field |
-|---|---|
-| `street` | `organization_street_address_1` |
-| `street2` | `organization_street_address_2` |
-| `city` | `organization_city` |
-| `state` | `organization_state_province` |
-| `zip` | `organization_postal_code` |
-| `country` | `organization_country` |
+| CN attribute | PDC base field                  |
+| ------------ | ------------------------------- |
+| `street`     | `organization_street_address_1` |
+| `street2`    | `organization_street_address_2` |
+| `city`       | `organization_city`             |
+| `state`      | `organization_state_province`   |
+| `zip`        | `organization_postal_code`      |
+| `country`    | `organization_country`          |
 
-⚠️ **No collision with GivingTuesday** — GT fills the `organization_irs_*` address family; this is the *general* org address family, which is unfilled. They coexist by design.
+⚠️ **No collision with GivingTuesday** — GT fills the `organization_irs_*` address family; this is the _general_ org address family, which is unfilled. They coexist by design.
 
 ## Phase 2 — Premier-tier financials (verify schema first)
 
@@ -44,14 +44,14 @@ If exposed on the tier, these are one-to-one `currency` targets: `organization_t
 
 ## Fetched but NOT mappable — no PDC target (6)
 
-| CN attribute | Why it can't land |
-|---|---|
-| `encompassScore` | No org-level score field. `review_*_score` is proposal-review, not org rating |
-| `encompassStarRating` | No target |
-| `encompassPublicationDate` | No target (only meaningful with a rating field) |
-| `encompassRatingId` | Internal ID, low value |
-| `size` | Revenue *band*, not a value — `organization_operating_budget` semantics don't match |
-| `cause` | Text category; nearest is `organization_ntee_code` (a code, already filled by GivingTuesday) |
+| CN attribute               | Why it can't land                                                                            |
+| -------------------------- | -------------------------------------------------------------------------------------------- |
+| `encompassScore`           | No org-level score field. `review_*_score` is proposal-review, not org rating                |
+| `encompassStarRating`      | No target                                                                                    |
+| `encompassPublicationDate` | No target (only meaningful with a rating field)                                              |
+| `encompassRatingId`        | Internal ID, low value                                                                       |
+| `size`                     | Revenue _band_, not a value — `organization_operating_budget` semantics don't match          |
+| `cause`                    | Text category; nearest is `organization_ntee_code` (a code, already filled by GivingTuesday) |
 
 **New base fields needed** to capture CN's signature data: `organization_charity_navigator_score`, `_star_rating`, `_rating_date`.
 
