@@ -390,7 +390,7 @@ const updateAllCommand: CommandModule<unknown, UpdateAllCommandArgs> = {
     // Third, register a batch of changemaker fields to be posted.
     const fieldBatch = await postChangemakerFieldValueBatch(args.pdcApiBaseUrl, token, {
       sourceId: source.id,
-      notes: `data-scripts givingTuesday.ts execution ${Date.now()}`,
+      notes: `data-scripts gtdc990.ts execution ${Date.now()}`,
     });
     const missingPermissionChangemakerIds: Set<number> = new Set<number>();
     // Last, for each nonprofit, for each field, post the field. These are

@@ -4,7 +4,7 @@ import {
   isBmfRecord,
   parseGivingTuesdayDate,
   toGivingTuesdayEin,
-} from './givingTuesday.js';
+} from './gtdc990.js';
 
 describe('toGivingTuesdayEin', () => {
   it('strips a hyphen', () => {
