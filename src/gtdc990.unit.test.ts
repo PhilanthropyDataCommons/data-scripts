@@ -3,8 +3,22 @@ import {
   extractResultsFromResponse,
   isBmfRecord,
   parseGivingTuesdayDate,
+  selectChangemakers,
   toGivingTuesdayEin,
-} from './givingTuesday.js';
+} from './gtdc990.js';
+import type { Changemaker, ChangemakerBundle } from '@pdc/sdk';
+
+// Minimal Changemaker fixture; selectChangemakers only reads `id`, but the SDK
+// type requires the full shape, so fill the rest with inert defaults.
+const makeChangemaker = (id: number, taxId: string): Changemaker => ({
+  id,
+  taxId,
+  name: `Org ${id}`,
+  createdAt: '2024-01-01T00:00:00Z',
+  createdBy: 'test',
+  fiscalSponsors: [],
+  fields: [],
+});
 
 describe('toGivingTuesdayEin', () => {
   it('strips a hyphen', () => {
@@ -99,5 +113,35 @@ describe('extractResultsFromResponse', () => {
       body: { query: '842929872', no_results: 1, results: null },
     } as unknown as Parameters<typeof extractResultsFromResponse>[0];
     expect(() => extractResultsFromResponse(malformed, '842929872')).toThrow(/malformed response for EIN 842929872/v);
+  });
+});
+
+describe('selectChangemakers', () => {
+  const bundle: ChangemakerBundle = {
+    entries: [makeChangemaker(1, '11-1111111'), makeChangemaker(2, '22-2222222'), makeChangemaker(3, '33-3333333')],
+    total: 3,
+  };
+
+  it('returns the full bundle unchanged when no ID is supplied', () => {
+    expect(selectChangemakers(bundle, undefined)).toBe(bundle);
+  });
+
+  it('scopes to the single matching changemaker and updates total', () => {
+    const result = selectChangemakers(bundle, 2);
+    expect(result.entries).toHaveLength(1);
+    expect(result.entries[0]?.id).toBe(2);
+    expect(result.total).toBe(1);
+  });
+
+  it('returns an empty bundle with total 0 for an unknown ID', () => {
+    const result = selectChangemakers(bundle, 999);
+    expect(result.entries).toStrictEqual([]);
+    expect(result.total).toBe(0);
+  });
+
+  it('does not mutate the original bundle when filtering', () => {
+    selectChangemakers(bundle, 2);
+    expect(bundle.entries).toHaveLength(3);
+    expect(bundle.total).toBe(3);
   });
 });
