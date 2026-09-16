@@ -320,10 +320,15 @@ const lookupFromPdcCommand: CommandModule<unknown, LookupFromPdcCommandArgs> = {
  * supplied, or the full bundle otherwise. Kept separate from the `updateAll`
  * handler to keep that handler's complexity in check.
  */
-const selectChangemakers = (changemakers: ChangemakerBundle, changemakerId: number | undefined): ChangemakerBundle =>
-  changemakerId === undefined
-    ? changemakers
-    : { ...changemakers, entries: changemakers.entries.filter((c) => c.id === changemakerId) };
+const selectChangemakers = (changemakers: ChangemakerBundle, changemakerId: number | undefined): ChangemakerBundle => {
+  if (changemakerId === undefined) {
+    return changemakers;
+  }
+  const entries = changemakers.entries.filter((c) => c.id === changemakerId);
+  // Keep `total` consistent with the filtered `entries` so the returned bundle
+  // isn't internally inconsistent (the original total is the full PDC count).
+  return { ...changemakers, entries, total: entries.length };
+};
 
 const getOrCreateSource = async (baseUrl: string, token: AccessTokenSet): Promise<Source> => {
   const sources = await getSources(baseUrl, token);
@@ -439,4 +444,11 @@ const givingTuesday: CommandModule = {
   handler: () => {},
 };
 
-export { extractResultsFromResponse, givingTuesday, isBmfRecord, parseGivingTuesdayDate, toGivingTuesdayEin };
+export {
+  extractResultsFromResponse,
+  givingTuesday,
+  isBmfRecord,
+  parseGivingTuesdayDate,
+  selectChangemakers,
+  toGivingTuesdayEin,
+};
