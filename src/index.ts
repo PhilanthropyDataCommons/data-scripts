@@ -7,6 +7,7 @@ import { getMetrics } from './getMetrics.js';
 import { givingTuesday } from './givingTuesday.js';
 import { logger } from './logger.js';
 import { getTokenCommand } from './oidc.js';
+import { techsoup } from './techsoup.js';
 
 config();
 
@@ -37,6 +38,7 @@ const main = async (argv: string[]): Promise<void> => {
     .command(charityNavigator)
     .command(getMetrics)
     .command(givingTuesday)
+    .command(techsoup)
     .demandCommand()
     .parse();
 };
