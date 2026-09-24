@@ -4,7 +4,7 @@ import { hideBin } from 'yargs/helpers';
 import { candid } from './candid.js';
 import { charityNavigator } from './charityNavigator.js';
 import { getMetrics } from './getMetrics.js';
-import { givingTuesday } from './givingTuesday.js';
+import { givingTuesday } from './gtdc990.js';
 import { logger } from './logger.js';
 import { getTokenCommand } from './oidc.js';
 
