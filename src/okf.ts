@@ -193,6 +193,10 @@ const extractEin = (readmeFrontmatter: Record<string, unknown>): string | null =
   return isValidEin(id) ? id : null;
 };
 
+/** The organization's display name (README `title`), used when creating a changemaker; null if absent. */
+const extractOrganizationName = (readmeFrontmatter: Record<string, unknown>): string | null =>
+  toFieldValueString(getFrontmatterValue(readmeFrontmatter, 'title'));
+
 /** Derive a `goodAsOf` ISO date (YYYY-MM-DD) from the bundle's `generated.at`, or null. */
 const extractGoodAsOf = (readmeFrontmatter: Record<string, unknown>): string | null => {
   const at = toFieldValueString(getFrontmatterValue(readmeFrontmatter, 'generated.at'));
@@ -406,6 +410,7 @@ export {
   describeBundleCount,
   extractEin,
   extractGoodAsOf,
+  extractOrganizationName,
   findOrgBundles,
   getFrontmatterValue,
   organizationFieldMap,

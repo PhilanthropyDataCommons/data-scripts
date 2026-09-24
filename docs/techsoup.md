@@ -88,8 +88,11 @@ Open a ChangemakerFieldValueBatch (sourceId + notes with timestamp)
 For each OKF package (one at a time):
    extract EIN from README frontmatter (x-civic.registration.id, IRS-EIN only)
       └─ no valid EIN ──► skip package
-   match EIN to a PDC changemaker (getChangemakerByEin)
-      └─ no unique match ──► skip package
+   resolve EIN against PDC changemakers (resolveChangemaker)
+      ├─ exactly one match ──► use it
+      ├─ >1 match (ambiguous) ──► skip package (warn)
+      └─ no match ──► --add-changemakers ? POST /changemakers (taxId=EIN, name=README title)
+                                          : skip package
    derive goodAsOf from README generated.at
    collect organization fields (organizationFieldMap) and proposal fields
       └─ proposal fields are reported but NOT written (stubbed — see §4.2)
@@ -105,7 +108,8 @@ Clean up any temp extraction dir
 
 - **Package detection (1 vs many):** `findOrgBundles` walks the resolved root and treats every directory whose `README.md` frontmatter declares `type: org` as one package (it does not descend into a package once found). If the root _itself_ is a package, exactly one is returned; otherwise every nested package is collected. `describeBundleCount` logs which case occurred. Either way, packages are processed **one at a time**.
 - **EIN extraction (`extractEin`):** reads `x-civic.registration.id` and only accepts it when `x-civic.registration.scheme` is `IRS-EIN` (or absent) **and** the id passes `isValidEin` (`^\d{2}-?\d{7}$`). Non-US bundles (Polish `KRS`, Kenyan PBO, …) therefore yield no EIN and are skipped — they cannot match a US-EIN-keyed changemaker.
-- **EIN → changemaker matching (`getChangemakerByEin`):** compares hyphen-stripped EINs and returns a changemaker only when **exactly one** matches. Zero → logged at info and skipped; more than one → warning and skipped (ambiguous, nothing written). This is the "if it doesn't exist in the PDC, skip it" rule.
+- **EIN → changemaker matching (`resolveChangemaker`):** compares hyphen-stripped EINs and classifies the result as `matched` (exactly one), `ambiguous` (more than one — always skipped with a warning, never auto-created), or `missing` (none). By default `missing` is skipped ("if it doesn't exist in the PDC, skip it"); with `--add-changemakers` a `missing` package instead **creates** a changemaker (see below).
+- **Creating changemakers (`--add-changemakers`, `createChangemakerForBundle`):** off by default. When on, a `missing` package is created via `POST /changemakers` with `taxId` = the package EIN (stored **verbatim, hyphenated**, e.g. `00-1000008`) and `name` = the README `title`. A package with **no README title is skipped** (a changemaker needs a name), and a **403** on create is treated like other privileged writes (warned and skipped). Newly created changemakers are tracked in-memory so a second package with the same EIN in the same run reuses the new record rather than creating a duplicate. The flag is **ignored when `--changemaker-id` is set** (that scopes the run to one existing changemaker), and it does not apply to `ambiguous` matches.
 - **`goodAsOf` derivation (`extractGoodAsOf`):** takes the date portion (`YYYY-MM-DD`) of the README's `generated.at`, or `null` if missing/unparseable (`goodAsOf` is nullable in PDC).
 - **Value coercion (`toFieldValueString`):** trims strings (dropping empties), stringifies numbers/booleans, and joins arrays (e.g. `aliases`, `ntee`) with `"; "`. Objects are skipped.
 - **Sequential writes:** field values are POSTed one at a time (not `Promise.all`) because the PDC API times out under concurrent POSTs to `/changemakerFieldValues`.
@@ -184,8 +188,13 @@ data-scripts techsoup inventory --source C:\Data\TechSoup\organizations --show-f
 
 ### `updateAll`
 
-- **Args:** `--source` (required), `--pdc-api-base-url` (required), all `oidcOptions` (`--oidc-base-url`, `--oidc-client-id`, `--oidc-client-secret`), `--changemaker-id` (optional; scope to one changemaker), `--dry-run` (optional boolean, default `false`).
-- **Behavior:** The full sync described in §3. The only subcommand that writes to PDC. `--dry-run` performs discovery and mapping and logs each intended `POST` without authenticating or writing.
+- **Args:** `--source` (required), `--pdc-api-base-url` (required), all `oidcOptions` (`--oidc-base-url`, `--oidc-client-id`, `--oidc-client-secret`), `--changemaker-id` (optional; scope to one changemaker), `--dry-run` (optional boolean, default `false`), `--add-changemakers` (optional boolean, default `false`).
+- **Behavior:** The full sync described in §3. The only subcommand that writes to PDC. `--dry-run` performs discovery and mapping and logs each intended `POST` (including `would CREATE changemaker …` lines when `--add-changemakers` is set) without authenticating or writing.
+- **`--add-changemakers`:** When a package's EIN has **no** match in the PDC, create a new changemaker for it (`taxId` = EIN, `name` = README `title`) instead of skipping it. Requires a valid IRS-EIN and a README title; ambiguous matches are never auto-created; ignored when `--changemaker-id` is set. See §3 "Creating changemakers".
+
+```bash
+data-scripts techsoup updateAll --source C:\Data\TechSoup\organizations --add-changemakers --dry-run --pdc-api-base-url <url> --oidc-base-url <url> --oidc-client-id <id> --oidc-client-secret <secret>
+```
 
 ---
 
@@ -211,13 +220,15 @@ The **number of OKF packages** is then a property of the tree, determined by `fi
 | Unreadable / missing markdown file      | `parseFrontmatterFile` logs at debug and returns `null`; that field is skipped |
 | Malformed YAML frontmatter              | Caught; treated as empty frontmatter (package may then be skipped)             |
 | No frontmatter at all                   | Treated as an empty object                                                     |
-| Non-US / non-EIN registration           | `extractEin` returns `null`; package skipped                                   |
-| EIN not present in PDC                  | `getChangemakerByEin` returns `null`; package skipped                          |
-| Ambiguous EIN → changemaker (>1 match)  | Skipped with a warning; nothing written                                        |
+| Non-US / non-EIN registration           | `extractEin` returns `null`; package skipped (never created, even with `--add-changemakers`) |
+| EIN not present in PDC                  | Default: package skipped. With `--add-changemakers`: a changemaker is created (see below)     |
+| Ambiguous EIN → changemaker (>1 match)  | Skipped with a warning; never auto-created                                     |
+| Create requested but no README title    | Skipped with a warning (`--add-changemakers` needs a name)                     |
+| HTTP 403 on changemaker create          | Warned; that package skipped; run continues                                    |
 | Null / empty / object-valued attributes | Skipped (not posted)                                                           |
 | Multi-value attributes (arrays)         | Flattened to a `"; "`-joined string                                            |
 | Missing / unparseable `generated.at`    | `goodAsOf` set to `null`                                                       |
-| HTTP 403 on write                       | Warned + changemakerId recorded; run continues; summary warning at end         |
+| HTTP 403 on field-value write           | Warned + changemakerId recorded; run continues; summary warning at end         |
 | PDC concurrency timeouts                | Field values POSTed sequentially                                               |
 | Missing TechSoup source                 | Attempt to create (usually admin-only); warns it may fail                      |
 | Proposal fields                         | Collected and reported, **not written** (stubbed — §4.2)                       |
@@ -234,10 +245,12 @@ Unit tests in [`../src/techsoup.unit.test.ts`](../src/techsoup.unit.test.ts) cov
 - **`toFieldValueString`** — trims strings, returns `null` for empty/whitespace/`null`/`undefined`/empty-array/plain-object, stringifies numbers/booleans, and joins arrays with `"; "` (dropping empties).
 - **`extractEin`** — returns a valid EIN for `IRS-EIN` (or scheme-absent) registrations, and `null` for a non-IRS scheme (e.g. Polish KRS), an invalid id, or a missing id.
 - **`extractGoodAsOf`** — extracts `YYYY-MM-DD` from `generated.at`; returns `null` when missing or unparseable.
+- **`extractOrganizationName`** — returns the README `title` (the name used to create a changemaker); `null` when absent or blank.
 - **`getChangemakerByEin`** — matches ignoring hyphens; returns `null` when there is no match or when more than one changemaker matches.
+- **`resolveChangemaker`** — classifies an EIN as `matched` (unique), `missing` (none), or `ambiguous` (>1); this is what drives the `--add-changemakers` decision.
 - **`selectChangemakers`** — returns the full bundle when no ID is given; scopes to a single changemaker and updates `total`; returns an empty bundle for an unknown ID.
 
-The file-system and network-facing functions (`prepareSourceRoot`, `extractZip`, `findOrgBundles`, `collectFieldsFromMap`, the command handlers, and all PDC writes) are not directly unit-tested; testability is achieved by extracting the pure parsing/mapping/matching logic into the exported helpers above (the same approach as the GivingTuesday integration).
+The parsing/OKF helpers live in [`../src/okf.ts`](../src/okf.ts) and the changemaker matching/write helpers in [`../src/changemakers.ts`](../src/changemakers.ts); [`../src/techsoup.ts`](../src/techsoup.ts) is the CLI wiring. The file-system and network-facing functions (`prepareSourceRoot`, `extractZip`, `findOrgBundles`, `collectFieldsFromMap`, `createChangemakerForBundle`, `runUpdateAllWrite`, the command handlers, and all PDC writes) are not directly unit-tested; testability is achieved by extracting the pure parsing/mapping/matching logic into the exported helpers above (the same approach as the GivingTuesday integration).
 
 ---
 

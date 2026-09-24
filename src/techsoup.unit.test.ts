@@ -1,6 +1,13 @@
 import { describe, expect, it } from '@jest/globals';
-import { extractEin, extractGoodAsOf, getFrontmatterValue, parseFrontmatter, toFieldValueString } from './okf.js';
-import { getChangemakerByEin, selectChangemakers } from './techsoup.js';
+import { getChangemakerByEin, resolveChangemaker, selectChangemakers } from './changemakers.js';
+import {
+  extractEin,
+  extractGoodAsOf,
+  extractOrganizationName,
+  getFrontmatterValue,
+  parseFrontmatter,
+  toFieldValueString,
+} from './okf.js';
 import type { Changemaker, ChangemakerBundle } from '@pdc/sdk';
 
 // Minimal Changemaker fixture; the helpers under test only read `id`/`taxId`,
@@ -173,6 +180,47 @@ describe('extractGoodAsOf', () => {
 
   it('returns null when generated.at is not a parseable date', () => {
     expect(extractGoodAsOf({ generated: { at: 'sometime' } })).toBeNull();
+  });
+});
+
+describe('extractOrganizationName', () => {
+  it('returns the README title', () => {
+    expect(extractOrganizationName({ title: 'synthetic-Black Mountain Workforce Partnership' })).toBe(
+      'synthetic-Black Mountain Workforce Partnership',
+    );
+  });
+
+  it('returns null when the title is absent', () => {
+    expect(extractOrganizationName({ description: 'no title here' })).toBeNull();
+  });
+
+  it('returns null when the title is blank', () => {
+    expect(extractOrganizationName({ title: '   ' })).toBeNull();
+  });
+});
+
+describe('resolveChangemaker', () => {
+  const bundle: ChangemakerBundle = {
+    entries: [makeChangemaker(1, '00-1000008'), makeChangemaker(2, '22-3456789')],
+    total: 2,
+  };
+
+  it('resolves a unique match (hyphen-insensitive)', () => {
+    const resolution = resolveChangemaker('001000008', bundle);
+    expect(resolution.kind).toBe('matched');
+    expect(resolution.kind === 'matched' ? resolution.changemaker.id : null).toBe(1);
+  });
+
+  it('resolves to missing when there is no match', () => {
+    expect(resolveChangemaker('99-9999999', bundle).kind).toBe('missing');
+  });
+
+  it('resolves to ambiguous when more than one changemaker matches', () => {
+    const ambiguous: ChangemakerBundle = {
+      entries: [makeChangemaker(1, '00-1000008'), makeChangemaker(2, '001000008')],
+      total: 2,
+    };
+    expect(resolveChangemaker('00-1000008', ambiguous).kind).toBe('ambiguous');
   });
 });
 
