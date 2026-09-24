@@ -1,6 +1,6 @@
 # Charity Navigator → PDC Field Gap Analysis
 
-**Subject:** [`src/charityNavigator.ts`](src/charityNavigator.ts) field mapping (`baseFieldMap`)
+**Subject:** [`src/charityNavigator.ts`](../../src/charityNavigator.ts) field mapping (`baseFieldMap`)
 **Question:** Which Charity Navigator fields are _not_ being loaded into PDC, and can any of them be mapped to existing PDC base fields going forward?
 **PDC field catalog source:** live query of `https://api.philanthropydatacommons.org/baseFields` (the same API that backs [philanthropydatacommons.org/base-fields-list](https://philanthropydatacommons.org/base-fields-list/)) — **282 base fields** total, retrieved 2026-08-19.
 **Generated:** 2026-08-19
