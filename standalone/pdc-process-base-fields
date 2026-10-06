@@ -15,7 +15,7 @@ __doc__ = """Reformat PDC base fields for manipulation and presentation.
 Anyone can get PDC base fields as JSON via an unauthenticated request:
 
   $ curl -X 'GET'                                        \\
-    'https://api.philanthropydatacommons.org/baseFields' \\
+    'https://api.philanthropydatacommons.org/baseFields?_page=1&_count=2147483647' \\
     -H 'accept: application/json' 2>/dev/null
 
 Right now, this script just converts that JSON to CSV.  CSV is easier
@@ -28,7 +28,7 @@ need for that.
 Here is an example of typical usage:
 
   (venv) $ curl -X 'GET'                                         \\
-            'https://api.philanthropydatacommons.org/baseFields' \\
+            'https://api.philanthropydatacommons.org/baseFields?_page=1&_count=2147483647' \\
             -H 'accept: application/json' 2>/dev/null            \\
            | ./pdc-process-base-fields | tee pdc-base-fields.csv
 

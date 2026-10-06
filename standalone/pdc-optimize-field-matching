@@ -242,7 +242,10 @@ def retrieve_application_forms():
 
 @app.command()
 def retrieve_base_fields():
-    retrieve_pdc_data("baseFields")
+    retrieve_pdc_data(
+        "baseFields",
+        params={"_count": 2147483647, "_page": 1},
+    )
 
 
 @app.command()
