@@ -1,0 +1,22 @@
+# Ruff configuration for the standalone Python scripts.
+#
+# The scripts deliberately carry no .py extension (they are standalone
+# command-line programs), so CI passes their paths to ruff and bandit
+# explicitly; a directory scan would silently skip them.
+target-version = "py311"
+
+[lint]
+select = [
+    "B",   # flake8-bugbear
+    "C4",  # flake8-comprehensions
+    "E4",  # pycodestyle imports
+    "E7",  # pycodestyle statements
+    "E9",  # pycodestyle runtime
+    "F",   # pyflakes
+    "I",   # isort
+    "SIM", # flake8-simplify
+    "UP",  # pyupgrade
+    "W",   # pycodestyle whitespace
+]
+# E501 (line-too-long) is not selected: the scripts embed long example
+# command lines and URLs in their docstrings on purpose.

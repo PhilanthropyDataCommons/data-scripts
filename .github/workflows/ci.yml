@@ -64,6 +64,32 @@ jobs:
       - run: npm ci
       - run: npm run lint:tsc
 
+  # The standalone scripts carry no .py extension on purpose, so ruff
+  # and bandit lint their explicit paths below; a directory scan would
+  # silently skip them. See standalone/ruff.toml for the rule set.
+  ruff:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/ruff-action@v4
+        with:
+          version: "0.17.4"
+          args: check standalone/pdc-process-base-fields standalone/pdc-optimize-field-matching
+      - uses: astral-sh/ruff-action@v4
+        with:
+          version: "0.17.4"
+          args: format --check standalone/pdc-process-base-fields standalone/pdc-optimize-field-matching
+
+  bandit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.13"
+      - run: pip install bandit==1.9.4
+      - run: bandit -q standalone/pdc-process-base-fields standalone/pdc-optimize-field-matching
+
   build:
     runs-on: ubuntu-latest
     steps:

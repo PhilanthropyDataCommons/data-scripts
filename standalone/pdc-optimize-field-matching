@@ -138,6 +138,7 @@ def retrieve_pdc_data(endpoint: str, *, params: dict[str, Any] | None = None):
         f"{DS_PDC_API_BASE_URL}{endpoint}",
         headers={"Authorization": f"Bearer {access_token}"},
         params=params or {},
+        timeout=60,
     )
 
     pdc_data_dict = pdc_data_response.json()
@@ -231,7 +232,6 @@ class RAG(dspy.Module):
         )
 
 
-
 @app.command()
 def retrieve_application_forms():
     retrieve_pdc_data(
@@ -250,7 +250,7 @@ def retrieve_base_fields():
 
 @app.command()
 def transform_application_forms():
-    with open(base_path / "applicationForms.json", "r", encoding="utf-8") as f:
+    with open(base_path / "applicationForms.json", encoding="utf-8") as f:
         application_form_dict = json.load(f)
 
     mappings = []
@@ -396,7 +396,7 @@ def optimize_rag():
         num_threads=2,
         track_stats=True,
         use_merge=False,
-        reflection_lm=lm, # TODO: use a separate reflection LLM
+        reflection_lm=lm,  # TODO: use a separate reflection LLM
     )
 
     rag = RAG()
@@ -414,7 +414,7 @@ def optimize_rag():
     optimized_rag = optimizer.compile(
         rag,
         trainset=trainset_examples,
-        valset=trainset_examples, # TODO: use a separate validation set
+        valset=trainset_examples,  # TODO: use a separate validation set
     )
 
     optimized_rag.save(base_path / "optimized_rag.json")
