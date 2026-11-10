@@ -64,6 +64,31 @@ jobs:
       - run: npm ci
       - run: npm run lint:tsc
 
+  # The standalone scripts carry no .py extension on purpose, so a
+  # directory scan would silently skip them. The shell expands the
+  # pdc-* globs below instead, so new scripts following the repo's
+  # pdc- naming convention are picked up without touching this file.
+  ruff:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.13"
+      - run: pip install ruff==0.17.4
+      - run: ruff check standalone/pdc-*
+      - run: ruff format --check standalone/pdc-*
+
+  bandit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.13"
+      - run: pip install bandit==1.9.4
+      - run: bandit -q standalone/pdc-*
+
   build:
     runs-on: ubuntu-latest
     steps:
