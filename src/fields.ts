@@ -1,6 +1,5 @@
-// Multi-valued source data (e.g. OKF `aliases`/`ntee`, or an array-valued field
-// in a `_pdc.json`) is flattened into a single PDC string with this separator,
-// since a ChangemakerFieldValue.value is a scalar string.
+// An array-valued field in a `_pdc.json` is flattened into a single PDC string
+// with this separator, since a ChangemakerFieldValue.value is a scalar string.
 const ARRAY_VALUE_SEPARATOR = '; ';
 
 /** A resolved value ready to be posted as a PDC field, with a provenance note. */
@@ -11,16 +10,24 @@ interface MappedField {
 }
 
 /**
- * The source-agnostic unit of work: the normalized package that both the OKF
- * bundle reader and the `_pdc.json` reader produce, and what the importer loads
- * into the PDC. `ein`/`name`/`goodAsOf` may be null (e.g. `goodAsOf` is always
- * null for `_pdc.json` sources, which carry no generation date).
+ * One organization as read from a `_pdc.json` file, before its fields are
+ * sorted by PDC base-field category. `ein`/`name` may be null; `goodAsOf` is
+ * currently always null because the JSON carries no generation date.
  */
-interface TechSoupPackage {
+interface TechSoupDocument {
   slug: string;
   ein: string | null;
   name: string | null;
   goodAsOf: string | null;
+  fields: MappedField[];
+}
+
+/**
+ * A document whose fields have been sorted by the PDC's base-field categories
+ * (see `applyBaseFieldCategories`): what the importer loads into the PDC.
+ * Only `organizationFields` are written; `proposalFields` are reported.
+ */
+interface TechSoupPackage extends Omit<TechSoupDocument, 'fields'> {
   organizationFields: MappedField[];
   proposalFields: MappedField[];
 }
@@ -44,7 +51,4 @@ const toFieldValueString = (value: unknown): string | null => {
   return null;
 };
 
-/** Proposal-scoped base fields are those whose short code starts with `proposal_`. */
-const isProposalField = (baseFieldShortCode: string): boolean => baseFieldShortCode.startsWith('proposal_');
-
-export { type MappedField, type TechSoupPackage, isProposalField, toFieldValueString };
+export { type MappedField, type TechSoupDocument, type TechSoupPackage, toFieldValueString };

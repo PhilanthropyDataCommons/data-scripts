@@ -1,15 +1,5 @@
 import { AxiosError } from 'axios';
 import { logger } from './logger.js';
-import {
-  type MappedField,
-  type OkfBundle,
-  collectFieldsFromMap,
-  collectProposalFields,
-  extractEin,
-  extractGoodAsOf,
-  extractOrganizationName,
-  organizationFieldMap,
-} from './okf.js';
 import { type AccessTokenSet, getToken } from './oidc.js';
 import {
   getSources,
@@ -19,11 +9,13 @@ import {
   postSource,
   type WritableChangemakerFieldValue,
 } from './pdc-api.js';
-import type { Changemaker, ChangemakerBundle, Source } from '@pdc/sdk';
+import type { MappedField, TechSoupDocument, TechSoupPackage } from './fields.js';
+import type { Changemaker, ChangemakerBundle, Source, SourceBundle } from '@pdc/sdk';
 
 const TS_SHORT_CODE = 'techsoup';
 // When `@pdc/http-status-codes` is ready (issues 18-20 solved), use it instead.
 const HTTP_STATUS_FORBIDDEN = 403;
+const HTTP_STATUS_NOT_FOUND = 404;
 
 // ---------------------------------------------------------------------------
 // EIN → changemaker matching
@@ -38,7 +30,7 @@ const findChangemakersByEin = (ein: string, changemakers: ChangemakerBundle): Ch
 /**
  * The outcome of resolving an EIN against the PDC changemakers: a unique match
  * (`matched`), several matches (`ambiguous` — never auto-created), or none
- * (`missing` — a create candidate when `--add-changemakers` is set).
+ * (`missing` — a create candidate when `--create-changemaker` is set).
  */
 type ChangemakerResolution =
   { kind: 'matched'; changemaker: Changemaker } | { kind: 'ambiguous' } | { kind: 'missing' };
@@ -53,31 +45,6 @@ const resolveChangemaker = (ein: string, changemakers: ChangemakerBundle): Chang
     return { kind: 'matched', changemaker: match };
   }
   return { kind: 'missing' };
-};
-
-const getChangemakerByEin = (ein: string, changemakers: ChangemakerBundle): Changemaker | null => {
-  const resolution = resolveChangemaker(ein, changemakers);
-  if (resolution.kind === 'ambiguous') {
-    logger.warn(`Found multiple changemakers with EIN ${ein}, not returning any.`);
-    return null;
-  }
-  if (resolution.kind === 'missing') {
-    logger.info(`Found no changemaker with EIN ${ein}`);
-    return null;
-  }
-  return resolution.changemaker;
-};
-
-/**
- * Return the changemaker bundle scoped to a single ID when `changemakerId` is
- * supplied, or the full bundle otherwise.
- */
-const selectChangemakers = (changemakers: ChangemakerBundle, changemakerId: number | undefined): ChangemakerBundle => {
-  if (changemakerId === undefined) {
-    return changemakers;
-  }
-  const entries = changemakers.entries.filter((c) => c.id === changemakerId);
-  return { ...changemakers, entries, total: entries.length };
 };
 
 // ---------------------------------------------------------------------------
@@ -104,43 +71,87 @@ const postChangemakerFieldValueWarnOnForbidden = async (
   }
 };
 
+/**
+ * Pick the TechSoup source (`dataProviderShortCode === 'techsoup'`) from the PDC
+ * sources, or null when there is none. When several exist, the oldest (lowest
+ * ID) is used, with a warning, rather than creating yet another.
+ */
+const selectTechSoupSource = (sources: SourceBundle): Source | null => {
+  const techSoupSources = sources.entries
+    .filter((s) => s.dataProviderShortCode === TS_SHORT_CODE)
+    .sort((a, b) => a.id - b.id);
+  const [oldest] = techSoupSources;
+  if (oldest === undefined) {
+    return null;
+  }
+  if (techSoupSources.length > 1) {
+    logger.warn(
+      `Found ${techSoupSources.length} TechSoup sources (${techSoupSources.map((s) => s.id).join(', ')}); using source ${oldest.id}`,
+    );
+  }
+  return oldest;
+};
+
+/**
+ * Find the TechSoup source, creating it only when none exists. Creating needs
+ * the `techsoup` data provider to exist and permission to add sources to it
+ * (typically a `pdc-admin`); a 403/404 from the PDC is reported as that setup
+ * problem instead of a raw HTTP error.
+ */
 const getOrCreateSource = async (baseUrl: string, token: AccessTokenSet): Promise<Source> => {
   const sources = await getSources(baseUrl, token);
-  const filteredSources = sources.entries.filter((s) => s.dataProviderShortCode === TS_SHORT_CODE);
-  if (filteredSources.length === 1 && filteredSources[0] !== undefined) {
-    return filteredSources[0];
+  logger.debug(
+    { sources: sources.entries.map((s) => ({ id: s.id, dataProviderShortCode: s.dataProviderShortCode })) },
+    `GET /sources returned ${sources.entries.length} source(s)`,
+  );
+  const existing = selectTechSoupSource(sources);
+  if (existing !== null) {
+    return existing;
   }
-  logger.warn('Have a `pdc-admin` create a source because only administrators may be able.');
-  return await postSource(baseUrl, token, {
-    dataProviderShortCode: TS_SHORT_CODE,
-    label: 'TechSoup',
-  });
+  logger.warn('No TechSoup source found in the PDC; trying to create one (usually requires a `pdc-admin`).');
+  try {
+    return await postSource(baseUrl, token, {
+      dataProviderShortCode: TS_SHORT_CODE,
+      label: 'TechSoup',
+    });
+  } catch (e: unknown) {
+    if (e instanceof AxiosError && (e.status === HTTP_STATUS_NOT_FOUND || e.status === HTTP_STATUS_FORBIDDEN)) {
+      const problem =
+        e.status === HTTP_STATUS_NOT_FOUND
+          ? `the "${TS_SHORT_CODE}" data provider does not exist in this PDC`
+          : `this account may not create sources for the "${TS_SHORT_CODE}" data provider`;
+      throw new Error(
+        `Cannot create the TechSoup source (HTTP ${e.status}): ${problem}. Ask a pdc-admin to create the "${TS_SHORT_CODE}" data provider and its source, then re-run.`,
+        { cause: e },
+      );
+    }
+    throw e;
+  }
 };
 
 /**
  * Create a new PDC changemaker for a package whose EIN is not yet in the PDC.
- * Requires an organization name (README `title`); the EIN is stored verbatim
- * (hyphenated) as the taxId. Returns null (with a warning) when the name is
- * missing or the create is forbidden (403 — creating changemakers is privileged).
+ * Requires the package name; the EIN is stored verbatim (hyphenated) as the
+ * taxId. Returns null (with a warning) when the name is missing or the create is
+ * forbidden (403 — creating changemakers is privileged).
  */
-const createChangemakerForBundle = async (
+const createChangemakerForPackage = async (
   baseUrl: string,
   token: AccessTokenSet,
   ein: string,
-  bundle: OkfBundle,
+  pkg: TechSoupPackage,
 ): Promise<Changemaker | null> => {
-  const name = extractOrganizationName(bundle.readme);
-  if (name === null) {
-    logger.warn(`Cannot create a changemaker for ${bundle.slug}: no organization name (README title). Skipping.`);
+  if (pkg.name === null) {
+    logger.warn(`Cannot create a changemaker for ${pkg.slug}: no organization name. Skipping.`);
     return null;
   }
   try {
-    const changemaker = await postChangemaker(baseUrl, token, { taxId: ein, name });
-    logger.info({ id: changemaker.id, taxId: ein, name }, `Created changemaker for ${bundle.slug}`);
+    const changemaker = await postChangemaker(baseUrl, token, { taxId: ein, name: pkg.name });
+    logger.info({ id: changemaker.id, taxId: ein, name: pkg.name }, `Created changemaker for ${pkg.slug}`);
     return changemaker;
   } catch (e: unknown) {
     if (e instanceof AxiosError && e.status === HTTP_STATUS_FORBIDDEN) {
-      logger.warn(`No permission (403) to create a changemaker for ${bundle.slug} (taxId ${ein}). Skipping.`);
+      logger.warn(`No permission (403) to create a changemaker for ${pkg.slug} (taxId ${ein}). Skipping.`);
       return null;
     }
     throw e;
@@ -165,190 +176,258 @@ const warnProposalsStubbed = (slug: string, proposalFields: MappedField[]): void
   );
 };
 
+/**
+ * Sort the document's fields by the PDC's own base-field categories. Only
+ * `organization` fields may be posted to `/changemakerFieldValues`; fields of
+ * any other category (`project`, `budget`, …) belong to a proposal and go to
+ * `proposalFields`. Fields with no matching base field in this PDC are dropped
+ * with a warning, since the PDC would reject them.
+ */
+const applyBaseFieldCategories = (
+  doc: TechSoupDocument,
+  baseFields: { entries: ReadonlyArray<{ shortCode: string; category: string }> },
+): TechSoupPackage => {
+  const { fields, ...pkg } = doc;
+  const categoryByShortCode = new Map<string, string>(baseFields.entries.map((b) => [b.shortCode, b.category]));
+  const organizationFields: MappedField[] = [];
+  const proposalFields: MappedField[] = [];
+  const unknown: string[] = [];
+  for (const field of fields) {
+    const category = categoryByShortCode.get(field.baseFieldShortCode);
+    if (category === undefined) {
+      unknown.push(field.baseFieldShortCode);
+    } else if (category === 'organization') {
+      organizationFields.push(field);
+    } else {
+      proposalFields.push(field);
+    }
+  }
+  if (unknown.length > 0) {
+    logger.warn(
+      `${pkg.slug}: ${unknown.length} field(s) are not base fields in this PDC; skipping ${unknown.join(', ')}`,
+    );
+  }
+  return { ...pkg, organizationFields, proposalFields };
+};
+
 // ---------------------------------------------------------------------------
-// updateAll write path
+// Import plan: which changemaker the package is loaded into
 // ---------------------------------------------------------------------------
 
-/** Everything one package's writes need, gathered once so per-package helpers stay small. */
-interface WriteRun {
-  baseUrl: string;
-  token: AccessTokenSet;
-  batchId: number;
-  changemakers: ChangemakerBundle;
-  addChangemakers: boolean;
-  warnedChangemakers: Set<number>;
-}
+/**
+ * How the target changemaker is chosen: create a new one (`create`), use an
+ * explicit PDC changemaker ID (`id`), or match the package EIN against the
+ * existing changemakers (`ein`).
+ */
+type ChangemakerTarget = { kind: 'create' } | { kind: 'id'; changemakerId: number } | { kind: 'ein' };
+
+/** Map the CLI flags to a `ChangemakerTarget` (the CLI rejects combining the two flags). */
+const toChangemakerTarget = (createChangemaker: boolean, changemakerId: number | undefined): ChangemakerTarget => {
+  if (createChangemaker) {
+    return { kind: 'create' };
+  }
+  if (changemakerId !== undefined) {
+    return { kind: 'id', changemakerId };
+  }
+  return { kind: 'ein' };
+};
+
+/**
+ * What an import will do: load fields into an existing changemaker (`update`),
+ * create a changemaker and then load fields into it (`create`), or do nothing
+ * (`skip`, with the reason).
+ */
+type ImportPlan =
+  | { action: 'update'; changemaker: Changemaker }
+  | { action: 'create'; taxId: string; name: string }
+  | { action: 'skip'; reason: string };
+
+const planForExplicitId = (
+  pkg: TechSoupPackage,
+  changemakers: ChangemakerBundle,
+  changemakerId: number,
+): ImportPlan => {
+  const changemaker = changemakers.entries.find((c) => c.id === changemakerId);
+  if (changemaker === undefined) {
+    return { action: 'skip', reason: `No changemaker with ID ${changemakerId} exists in the PDC` };
+  }
+  if (pkg.ein !== null && pkg.ein.replace('-', '') !== changemaker.taxId.replace('-', '')) {
+    logger.warn(
+      `${pkg.slug}: file EIN ${pkg.ein} differs from changemaker ${changemakerId} taxId ${changemaker.taxId}; using --changemaker-id as given`,
+    );
+  }
+  return { action: 'update', changemaker };
+};
+
+const planForCreate = (pkg: TechSoupPackage, ein: string, resolution: ChangemakerResolution): ImportPlan => {
+  if (resolution.kind === 'matched') {
+    return {
+      action: 'skip',
+      reason: `EIN ${ein} already belongs to changemaker ${resolution.changemaker.id}; rerun without --create-changemaker to load into it`,
+    };
+  }
+  if (resolution.kind === 'ambiguous') {
+    return { action: 'skip', reason: `EIN ${ein} already matches multiple changemakers; not creating another` };
+  }
+  if (pkg.name === null) {
+    return { action: 'skip', reason: `${pkg.slug} has no organization name, which a new changemaker requires` };
+  }
+  return { action: 'create', taxId: ein, name: pkg.name };
+};
+
+const planForEin = (ein: string, resolution: ChangemakerResolution): ImportPlan => {
+  if (resolution.kind === 'matched') {
+    return { action: 'update', changemaker: resolution.changemaker };
+  }
+  if (resolution.kind === 'ambiguous') {
+    return { action: 'skip', reason: `EIN ${ein} matches multiple changemakers; pass --changemaker-id to choose one` };
+  }
+  return {
+    action: 'skip',
+    reason: `EIN ${ein} not found in the PDC; pass --create-changemaker to create it or --changemaker-id to choose one`,
+  };
+};
+
+/**
+ * Decide which changemaker the package goes to, without writing anything.
+ * `--create-changemaker` refuses to create a duplicate of an EIN already in the
+ * PDC; `--changemaker-id` must name an existing changemaker; otherwise the
+ * package EIN must match exactly one changemaker.
+ */
+const planImport = (pkg: TechSoupPackage, changemakers: ChangemakerBundle, target: ChangemakerTarget): ImportPlan => {
+  if (target.kind === 'id') {
+    return planForExplicitId(pkg, changemakers, target.changemakerId);
+  }
+  if (pkg.ein === null) {
+    return {
+      action: 'skip',
+      reason: `${pkg.slug} has no valid IRS EIN (organization_tax_id); pass --changemaker-id to choose a changemaker`,
+    };
+  }
+  const resolution = resolveChangemaker(pkg.ein, changemakers);
+  return target.kind === 'create' ? planForCreate(pkg, pkg.ein, resolution) : planForEin(pkg.ein, resolution);
+};
+
+/** One line naming the changemaker the plan targets (or why nothing will be imported). */
+const describeTarget = (plan: ImportPlan): string => {
+  if (plan.action === 'update') {
+    return `changemaker ${plan.changemaker.id} (${JSON.stringify(plan.changemaker.name)}, taxId ${plan.changemaker.taxId})`;
+  }
+  if (plan.action === 'create') {
+    return `NEW changemaker (${JSON.stringify(plan.name)}, taxId ${plan.taxId})`;
+  }
+  return `nothing — ${plan.reason}`;
+};
+
+/**
+ * The `--dry-run` report: the target changemaker, every organization field that
+ * would be imported into it, and the proposal fields that are present but not
+ * imported. Pure, so it can be unit-tested and logged line by line.
+ */
+const formatImportPreview = (pkg: TechSoupPackage, plan: ImportPlan): string[] => {
+  const lines = [`${pkg.slug} → ${describeTarget(plan)}`];
+  if (plan.action === 'skip') {
+    return lines;
+  }
+  lines.push(`Fields that would be imported (${pkg.organizationFields.length}, goodAsOf=${pkg.goodAsOf ?? 'null'}):`);
+  for (const field of pkg.organizationFields) {
+    lines.push(`  ${field.baseFieldShortCode} = ${JSON.stringify(field.value)}  [${field.sourceNote}]`);
+  }
+  if (pkg.proposalFields.length > 0) {
+    lines.push(`Proposal (non-organization) fields NOT imported (${pkg.proposalFields.length}):`);
+    for (const field of pkg.proposalFields) {
+      lines.push(`  ${field.baseFieldShortCode} = ${JSON.stringify(field.value)}  [${field.sourceNote}]`);
+    }
+  }
+  return lines;
+};
+
+// ---------------------------------------------------------------------------
+// Import write path
+// ---------------------------------------------------------------------------
 
 /** Base URL + OIDC credentials needed to start a write run (before authentication). */
-interface UpdateAllWriteContext {
+interface ImportWriteContext {
   pdcApiBaseUrl: string;
   oidcBaseUrl: string;
   oidcClientId: string;
   oidcClientSecret: string;
 }
 
-/**
- * Resolve the changemaker to load a package into, creating one when the EIN is
- * missing and `--add-changemakers` is set. Returns null when the package should
- * be skipped (ambiguous match, missing without the flag, or a missing-name /
- * forbidden create) — the reason is logged. Mutates `run.changemakers.entries`
- * when a new record is created so later packages with the same EIN reuse it.
- */
-const resolveOrCreateChangemaker = async (
-  run: WriteRun,
-  ein: string,
-  bundle: OkfBundle,
-): Promise<Changemaker | null> => {
-  const resolution = resolveChangemaker(ein, run.changemakers);
-  if (resolution.kind === 'matched') {
-    return resolution.changemaker;
-  }
-  if (resolution.kind === 'ambiguous') {
-    logger.warn(`Skipping ${bundle.slug}: EIN ${ein} matches multiple changemakers`);
-    return null;
-  }
-  if (!run.addChangemakers) {
-    logger.info(`Skipping ${bundle.slug}: EIN ${ein} not found in PDC`);
-    return null;
-  }
-  const created = await createChangemakerForBundle(run.baseUrl, run.token, ein, bundle);
-  if (created !== null) {
-    run.changemakers.entries.push(created);
-  }
-  return created;
-};
+/** An authenticated write session: where to POST, with what token, into which field-value batch. */
+interface WriteSession {
+  baseUrl: string;
+  token: AccessTokenSet;
+  batchId: number;
+}
 
-/** POST every mapped organization field for one package's changemaker (proposals stay stubbed). */
-const postOrganizationFields = async (run: WriteRun, changemaker: Changemaker, bundle: OkfBundle): Promise<void> => {
-  const goodAsOf = extractGoodAsOf(bundle.readme);
-  const organizationFields = await collectFieldsFromMap(bundle.path, organizationFieldMap);
-  warnProposalsStubbed(bundle.slug, await collectProposalFields(bundle.path));
+/** POST every organization field of the package to one changemaker, sequentially (proposals stay stubbed). */
+const postOrganizationFields = async (
+  session: WriteSession,
+  changemaker: Changemaker,
+  pkg: TechSoupPackage,
+): Promise<void> => {
+  warnProposalsStubbed(pkg.slug, pkg.proposalFields);
+  const warnedChangemakers = new Set<number>();
   /* eslint-disable no-await-in-loop -- sequential POSTs avoid PDC API connection saturation. */
-  for (const field of organizationFields) {
+  for (const field of pkg.organizationFields) {
     await postChangemakerFieldValueWarnOnForbidden(
-      run.baseUrl,
-      run.token,
+      session.baseUrl,
+      session.token,
       {
         changemakerId: changemaker.id,
-        batchId: run.batchId,
+        batchId: session.batchId,
         baseFieldShortCode: field.baseFieldShortCode,
         value: field.value,
-        goodAsOf,
+        goodAsOf: pkg.goodAsOf,
       },
-      run.warnedChangemakers,
+      warnedChangemakers,
     );
   }
   /* eslint-enable no-await-in-loop */
+  if (warnedChangemakers.size > 0) {
+    logger.warn(`No permission for at least one field of changemaker ${changemaker.id} (so not fully updated)`);
+  }
 };
 
-/** The live (non-dry-run) `updateAll` path: authenticate, open a batch, and load each package. */
-const runUpdateAllWrite = async (
-  bundles: OkfBundle[],
-  changemakers: ChangemakerBundle,
-  addChangemakers: boolean,
-  ctx: UpdateAllWriteContext,
+/**
+ * Carry out an `update`/`create` plan: authenticate, resolve the TechSoup
+ * source, create the changemaker if planned, open a field-value batch, then
+ * POST the organization fields. The source is resolved first so a missing
+ * source fails the run before anything (such as a new changemaker) is written.
+ */
+const runImportWrite = async (
+  pkg: TechSoupPackage,
+  plan: Exclude<ImportPlan, { action: 'skip' }>,
+  ctx: ImportWriteContext,
 ): Promise<void> => {
   // Up to this point we didn't need PDC authentication. Now we do.
   const token = await getToken(ctx.oidcBaseUrl, ctx.oidcClientId, ctx.oidcClientSecret);
   const source = await getOrCreateSource(ctx.pdcApiBaseUrl, token);
   logger.info(source, 'The PDC Source for TechSoup was found');
+  const changemaker =
+    plan.action === 'create'
+      ? await createChangemakerForPackage(ctx.pdcApiBaseUrl, token, plan.taxId, pkg)
+      : plan.changemaker;
+  if (changemaker === null) {
+    return;
+  }
   const fieldBatch = await postChangemakerFieldValueBatch(ctx.pdcApiBaseUrl, token, {
     sourceId: source.id,
-    notes: `data-scripts techsoup.ts execution ${Date.now()}`,
+    notes: `data-scripts techsoup.ts import of ${pkg.slug} ${Date.now()}`,
   });
-  const run: WriteRun = {
-    baseUrl: ctx.pdcApiBaseUrl,
-    token,
-    batchId: fieldBatch.id,
-    changemakers,
-    addChangemakers,
-    warnedChangemakers: new Set<number>(),
-  };
-  /* eslint-disable no-await-in-loop -- sequential per-package processing avoids PDC API saturation. */
-  for (const bundle of bundles) {
-    const ein = extractEin(bundle.readme);
-    if (ein === null) {
-      logger.info(`Skipping ${bundle.slug}: no IRS-EIN in package`);
-      continue;
-    }
-    const changemaker = await resolveOrCreateChangemaker(run, ein, bundle);
-    if (changemaker === null) {
-      continue;
-    }
-    await postOrganizationFields(run, changemaker, bundle);
-  }
-  /* eslint-enable no-await-in-loop */
-  if (run.warnedChangemakers.size > 0) {
-    logger.warn(
-      `No permission for at least one field in each of these changemakers (so not updated): ${JSON.stringify([...run.warnedChangemakers])}`,
-    );
-  }
+  await postOrganizationFields({ baseUrl: ctx.pdcApiBaseUrl, token, batchId: fieldBatch.id }, changemaker, pkg);
+  logger.info(`Imported ${pkg.organizationFields.length} field(s) into changemaker ${changemaker.id}`);
 };
 
-// ---------------------------------------------------------------------------
-// updateAll dry-run path
-// ---------------------------------------------------------------------------
-
-/**
- * Resolve the label a dry-run should print for a package's changemaker, or null
- * when the package would be skipped (logging the reason). `(new)` is returned
- * when `--add-changemakers` would create one.
- */
-const dryRunChangemakerLabel = (
-  bundle: OkfBundle,
-  ein: string,
-  changemakers: ChangemakerBundle,
-  addChangemakers: boolean,
-): string | null => {
-  const resolution = resolveChangemaker(ein, changemakers);
-  if (resolution.kind === 'ambiguous') {
-    logger.warn(`[dry-run] Skipping ${bundle.slug}: EIN ${ein} matches multiple changemakers`);
-    return null;
-  }
-  if (resolution.kind === 'matched') {
-    return String(resolution.changemaker.id);
-  }
-  if (!addChangemakers) {
-    logger.info(`[dry-run] Skipping ${bundle.slug}: EIN ${ein} not found in PDC`);
-    return null;
-  }
-  const name = extractOrganizationName(bundle.readme);
-  if (name === null) {
-    logger.warn(`[dry-run] Skipping ${bundle.slug}: would create a changemaker but README has no title (name)`);
-    return null;
-  }
-  logger.info(`[dry-run] would CREATE changemaker taxId=${ein} name=${JSON.stringify(name)}`);
-  return '(new)';
+export {
+  type ChangemakerTarget,
+  type ImportPlan,
+  applyBaseFieldCategories,
+  formatImportPreview,
+  planImport,
+  resolveChangemaker,
+  runImportWrite,
+  selectTechSoupSource,
+  toChangemakerTarget,
 };
-
-/** Dry-run of `updateAll`: log every intended write without contacting the PDC for auth or POSTs. */
-const runUpdateAllDryRun = async (
-  bundles: OkfBundle[],
-  changemakers: ChangemakerBundle,
-  addChangemakers: boolean,
-): Promise<void> => {
-  logger.info('[dry-run] No data will be written to the PDC.');
-  /* eslint-disable no-await-in-loop -- packages are processed sequentially, mirroring the real write path */
-  for (const bundle of bundles) {
-    const ein = extractEin(bundle.readme);
-    if (ein === null) {
-      logger.info(`[dry-run] Skipping ${bundle.slug}: no IRS-EIN in package`);
-      continue;
-    }
-    const changemakerLabel = dryRunChangemakerLabel(bundle, ein, changemakers, addChangemakers);
-    if (changemakerLabel === null) {
-      continue;
-    }
-    const goodAsOf = extractGoodAsOf(bundle.readme);
-    const organizationFields = await collectFieldsFromMap(bundle.path, organizationFieldMap);
-    for (const field of organizationFields) {
-      logger.info(
-        `[dry-run] would POST changemakerFieldValue changemakerId=${changemakerLabel} baseFieldShortCode=${field.baseFieldShortCode} goodAsOf=${goodAsOf ?? 'null'} value=${JSON.stringify(field.value)}`,
-      );
-    }
-    warnProposalsStubbed(bundle.slug, await collectProposalFields(bundle.path));
-  }
-  /* eslint-enable no-await-in-loop */
-};
-
-export { getChangemakerByEin, resolveChangemaker, runUpdateAllDryRun, runUpdateAllWrite, selectChangemakers };

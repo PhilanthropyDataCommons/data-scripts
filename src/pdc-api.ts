@@ -28,7 +28,8 @@ const callPdcApi = async <T>(
   return response.data;
 };
 
-const getBaseFields = async (baseUrl: string, token: AccessTokenSet): Promise<BaseFieldBundle> =>
+/** Get all base fields. `GET /baseFields` is public, so the token is optional. */
+const getBaseFields = async (baseUrl: string, token?: AccessTokenSet): Promise<BaseFieldBundle> =>
   await callPdcApi<BaseFieldBundle>(baseUrl, '/baseFields', 'get', {
     params: {
       _page: '1',
