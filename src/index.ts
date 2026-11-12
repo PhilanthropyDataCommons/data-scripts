@@ -4,9 +4,10 @@ import { hideBin } from 'yargs/helpers';
 import { candid } from './candid.js';
 import { charityNavigator } from './charityNavigator.js';
 import { getMetrics } from './getMetrics.js';
-import { givingTuesday } from './gtdc990.js';
-import { logger } from './logger.js';
+import { givingTuesday } from './givingTuesday.js';
+import { logger, toLoggableError } from './logger.js';
 import { getTokenCommand } from './oidc.js';
+import { techsoup } from './techsoup.js';
 
 config();
 
@@ -19,7 +20,7 @@ const main = async (argv: string[]): Promise<void> => {
     .env('DS')
     .config('config')
     .fail((msg, err, y) => {
-      logger.fatal({ m: msg, err, yargs: y }, 'Error encountered');
+      logger.fatal({ m: msg, err: toLoggableError(err), yargs: y }, 'Error encountered');
     })
     .command(
       ['show-args', 'args'],
@@ -37,11 +38,12 @@ const main = async (argv: string[]): Promise<void> => {
     .command(charityNavigator)
     .command(getMetrics)
     .command(givingTuesday)
+    .command(techsoup)
     .demandCommand()
     .parse();
 };
 
 main(process.argv).catch((err: unknown) => {
-  logger.fatal({ err }, 'Error encountered while running `main`');
+  logger.fatal({ err: toLoggableError(err) }, 'Error encountered while running `main`');
   process.exit(1);
 });

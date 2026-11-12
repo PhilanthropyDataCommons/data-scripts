@@ -1,6 +1,14 @@
 import { client } from './client.js';
 import type { AccessTokenSet } from './oidc.js';
-import type { BaseField, ProposalBundle, ChangemakerBundle, SourceBundle, Source, BaseFieldBundle } from '@pdc/sdk';
+import type {
+  BaseField,
+  Changemaker,
+  ProposalBundle,
+  ChangemakerBundle,
+  SourceBundle,
+  Source,
+  BaseFieldBundle,
+} from '@pdc/sdk';
 
 const callPdcApi = async <T>(
   baseUrl: string,
@@ -20,7 +28,8 @@ const callPdcApi = async <T>(
   return response.data;
 };
 
-const getBaseFields = async (baseUrl: string, token: AccessTokenSet): Promise<BaseFieldBundle> =>
+/** Get all base fields. `GET /baseFields` is public, so the token is optional. */
+const getBaseFields = async (baseUrl: string, token?: AccessTokenSet): Promise<BaseFieldBundle> =>
   await callPdcApi<BaseFieldBundle>(baseUrl, '/baseFields', 'get', {
     params: {
       _page: '1',
@@ -70,6 +79,23 @@ export interface WritableSource {
 
 const postSource = async (baseUrl: string, token: AccessTokenSet, data: WritableSource): Promise<Source> =>
   await callPdcApi<Source>(baseUrl, '/sources', 'post', { params: {}, token, data });
+
+/**
+ * The POST /changemakers body. The SDK's `Writable<Changemaker>` also pulls in
+ * `fields`/`fiscalSponsors`, which the create endpoint does not accept; only
+ * `taxId` and `name` are required (`keycloakOrganizationId` is optional).
+ */
+export interface WritableChangemaker {
+  taxId: string;
+  name: string;
+  keycloakOrganizationId?: string;
+}
+
+const postChangemaker = async (
+  baseUrl: string,
+  token: AccessTokenSet,
+  data: WritableChangemaker,
+): Promise<Changemaker> => await callPdcApi<Changemaker>(baseUrl, '/changemakers', 'post', { params: {}, token, data });
 
 // TODO: use the SDK, delete these temp types copied from the service repo
 interface ChangemakerFieldValueBatch {
@@ -138,6 +164,7 @@ export {
   getChangemakers,
   getProposals,
   getSources,
+  postChangemaker,
   postChangemakerFieldValueBatch,
   postChangemakerFieldValue,
   postPlatformProviderData,
