@@ -48,3 +48,18 @@ The `.env` file and `config.*.json` files are ignored by git,
 as they likely contain credentials and should not be committed.
 
 Finally, every option can be specified on the command line itself.
+
+## Standalone Python scripts
+
+The Python scripts in `standalone/` carry no filename extension, so
+a directory scan would silently skip them. CI lints them with ruff
+and bandit by shell-expanding the `standalone/pdc-*` glob, so for a
+new script to be covered by lint, its name should start with `pdc-`.
+
+To run the same checks locally:
+
+```
+ruff check standalone/pdc-*
+ruff format --check standalone/pdc-*
+bandit -q standalone/pdc-*
+```

@@ -188,6 +188,7 @@ interface LookupFromPdcCommandArgs {
 }
 
 interface UpdateAllCommandArgs {
+  'changemaker-id'?: number;
   'oidc-base-url': string;
   'oidc-client-id': string;
   'oidc-client-secret': string;
@@ -314,6 +315,21 @@ const lookupFromPdcCommand: CommandModule<unknown, LookupFromPdcCommandArgs> = {
   },
 };
 
+/**
+ * Return the changemaker bundle scoped to a single ID when `changemakerId` is
+ * supplied, or the full bundle otherwise. Kept separate from the `updateAll`
+ * handler to keep that handler's complexity in check.
+ */
+const selectChangemakers = (changemakers: ChangemakerBundle, changemakerId: number | undefined): ChangemakerBundle => {
+  if (changemakerId === undefined) {
+    return changemakers;
+  }
+  const entries = changemakers.entries.filter((c) => c.id === changemakerId);
+  // Keep `total` consistent with the filtered `entries` so the returned bundle
+  // isn't internally inconsistent (the original total is the full PDC count).
+  return { ...changemakers, entries, total: entries.length };
+};
+
 const getOrCreateSource = async (baseUrl: string, token: AccessTokenSet): Promise<Source> => {
   const sources = await getSources(baseUrl, token);
   const filteredSources = sources.entries.filter((s) => s.dataProviderShortCode === GT_SHORT_CODE);
@@ -340,9 +356,22 @@ const updateAllCommand: CommandModule<unknown, UpdateAllCommandArgs> = {
       demandOption: true,
       type: 'string',
     },
+    'changemaker-id': {
+      describe: 'Only load the single PDC changemaker with this ID (default: all changemakers in the PDC)',
+      demandOption: false,
+      type: 'number',
+    },
   },
   handler: async (args) => {
-    const changemakers = await getChangemakers(args.pdcApiBaseUrl);
+    const allChangemakers = await getChangemakers(args.pdcApiBaseUrl);
+    // When --changemaker-id is supplied, scope everything (the GivingTuesday
+    // lookups and the PDC posts) to that single changemaker; the rest of the
+    // handler then behaves as if the PDC held only that one changemaker.
+    const changemakers = selectChangemakers(allChangemakers, args.changemakerId);
+    if (changemakers.entries.length === 0) {
+      logger.warn({ changemakerId: args.changemakerId }, 'No matching changemakers found in PDC; nothing to load.');
+      return;
+    }
     const eins = changemakers.entries.flatMap((c) => c.taxId);
     const validEins = eins.filter(isValidEin);
     const invalidEins = eins.filter((e) => !isValidEin(e));
@@ -366,7 +395,7 @@ const updateAllCommand: CommandModule<unknown, UpdateAllCommandArgs> = {
     // Third, register a batch of changemaker fields to be posted.
     const fieldBatch = await postChangemakerFieldValueBatch(args.pdcApiBaseUrl, token, {
       sourceId: source.id,
-      notes: `data-scripts givingTuesday.ts execution ${Date.now()}`,
+      notes: `data-scripts gtdc990.ts execution ${Date.now()}`,
     });
     const missingPermissionChangemakerIds: Set<number> = new Set<number>();
     // Last, for each nonprofit, for each field, post the field. These are
@@ -415,4 +444,11 @@ const givingTuesday: CommandModule = {
   handler: () => {},
 };
 
-export { extractResultsFromResponse, givingTuesday, isBmfRecord, parseGivingTuesdayDate, toGivingTuesdayEin };
+export {
+  extractResultsFromResponse,
+  givingTuesday,
+  isBmfRecord,
+  parseGivingTuesdayDate,
+  selectChangemakers,
+  toGivingTuesdayEin,
+};

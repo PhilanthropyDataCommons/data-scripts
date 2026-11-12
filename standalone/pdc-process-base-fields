@@ -15,7 +15,7 @@ __doc__ = """Reformat PDC base fields for manipulation and presentation.
 Anyone can get PDC base fields as JSON via an unauthenticated request:
 
   $ curl -X 'GET'                                        \\
-    'https://api.philanthropydatacommons.org/baseFields' \\
+    'https://api.philanthropydatacommons.org/baseFields?_page=1&_count=2147483647' \\
     -H 'accept: application/json' 2>/dev/null
 
 Right now, this script just converts that JSON to CSV.  CSV is easier
@@ -28,7 +28,7 @@ need for that.
 Here is an example of typical usage:
 
   (venv) $ curl -X 'GET'                                         \\
-            'https://api.philanthropydatacommons.org/baseFields' \\
+            'https://api.philanthropydatacommons.org/baseFields?_page=1&_count=2147483647' \\
             -H 'accept: application/json' 2>/dev/null            \\
            | ./pdc-process-base-fields | tee pdc-base-fields.csv
 
@@ -69,8 +69,8 @@ those columns can simply do so.
   }
 """
 
-import json
 import argparse
+import json
 import sys
 
 try:
@@ -107,14 +107,18 @@ def main():
         # here would be RawDescriptionHelpFormatter -- I don't usually
         # use that because it can do some minor reformatting that I
         # find aesthetically displeasing, but hey, YMMV.
-        formatter_class=argparse.RawTextHelpFormatter)
-    allowed_formats = ["csv",]  # maybe also "markdown", "html", etc some day
+        formatter_class=argparse.RawTextHelpFormatter,
+    )
+    allowed_formats = [
+        "csv",
+    ]  # maybe also "markdown", "html", etc some day
     arg_parser.add_argument(
-        '--output-format',
+        "--output-format",
         choices=allowed_formats,
         type=str.lower,
         default="csv",
-        help="Output format to show base fields in.  Default: 'csv'")
+        help="Output format to show base fields in.  Default: 'csv'",
+    )
 
     # Parse command line.
     args = arg_parser.parse_args()
@@ -123,11 +127,12 @@ def main():
         json_input = json.load(sys.stdin)
         parsed_input = pandas.json_normalize(json_input)
         # Switch to index=True to include a first column that shows DataFrame index
-        parsed_input.to_csv(sys.stdout, index=False, encoding='utf-8')
+        parsed_input.to_csv(sys.stdout, index=False, encoding="utf-8")
     else:  # can't happen
         raise ValueError(
-            f"ERROR: Unknown output format 'f{args.output_format}' requested")
+            f"ERROR: Unknown output format 'f{args.output_format}' requested"
+        )
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()
