@@ -1,0 +1,473 @@
+#!/usr/bin/env pipx run
+
+# Copyright (C) PhilanthropyDataCommons.org
+# GNU Affero General Public License, Version 3 (AGPL-3.0)
+
+# Uses PEP 723 inline script metadata to auto-install dependencies in
+# a dedicated environment on script execution with `pipx run` or
+# `uv run`. Manual Python env setup also still works, just run:
+# `$ python -m venv venv`
+# `$ source ./venv/bin/activate`
+# `$ pip3 install` the following:
+# /// script
+# requires-python = ">=3.11"
+# dependencies = [
+#     "requests>=2.32",
+#     "requests-oauthlib>=2.0",
+# ]
+# ///
+
+# We deliberately don't comply with the snake_case naming convention,
+# because this is primarily a standalone command-line program and we
+# want its name to be as easy to type as possible, and hyphens don't
+# require a shift modifier (on most keyboards) whereas underscores do.
+#
+# pylint: disable=C0103
+
+__doc__ = """Start PDC's Keycloak-to-PDC user and organization syncs and
+wait for them to finish, exiting successfully only if both complete.
+
+PDC keeps a cached replica of the realm's users, organizations, and
+memberships; the replica only refreshes when someone calls the sync
+endpoints (POST /users/sync and POST /organizations/sync, each of
+which returns a task to poll). This script is meant to be called from
+cron (or a timer) on a utilities machine. It starts the user sync,
+polls that task until it finishes, then starts the organization sync
+and polls it the same way. Every HTTP request is attempted exactly
+once per run: a failed request fails the run, and the next cron run
+heals the situation. The only re-attempt is after an HTTP 401
+refreshes the access token, because a 401 is a definitive response
+and cannot have created a task. Each sync gets its own deadline.
+
+Typical usage:
+
+  $ ./pdc-sync-users-and-orgs \\
+      https://api.example.org \\
+      https://auth.example.org/realms/pdc
+
+Arguments:
+  API_URL    Base URL of the target PDC API, e.g.
+             https://api.example.org
+  REALM_URL  Keycloak realm URL prefix (the OIDC issuer); the script
+             derives the token endpoint as
+             REALM_URL/protocol/openid-connect/token
+
+Credentials come from the environment, not the command line, so they
+never show up in `ps` output:
+
+  DS_OIDC_CLIENT_ID      OAuth2 client ID of the PDC sync service
+                         account; the client needs the Keycloak
+                         realm-management roles `view-users` and
+                         `view-organizations` plus the built-in
+                         `kc-admin-api` client scope, and nothing more
+  DS_OIDC_CLIENT_SECRET  That client's secret
+
+Optional environment overrides (defaults in parentheses):
+
+  DS_SYNC_POLL_SECONDS     Seconds between status polls (10, 1..300)
+  DS_SYNC_TIMEOUT_SECONDS  Seconds each sync gets to finish
+                           (1800, 30..86400)
+
+Example cron entry; flock keeps overlapping runs out, and `set -a`
+exports the env file's plain DS_ assignments:
+
+  # /etc/cron.d/pdc-sync
+  17 * * * * pdc flock -n /run/lock/pdc-sync.lock sh -c 'set -a; . /etc/pdc-sync.env; set +a; exec /usr/local/bin/pdc-sync-users-and-orgs https://api.example.org https://auth.example.org/realms/pdc >>/var/log/pdc-sync.log 2>&1'
+
+Exit codes:
+  0  both the user sync and the organization sync completed
+  1  the user sync did not complete (takes precedence over 2)
+  2  the organization sync did not complete
+  3  configuration or usage error
+"""
+
+import argparse
+import json
+import os
+import sys
+import time
+from dataclasses import dataclass
+from datetime import UTC, datetime
+from urllib.parse import urlparse
+
+try:
+    import requests
+    from oauthlib.oauth2 import BackendApplicationClient, OAuth2Error
+    from requests_oauthlib import OAuth2Session
+except ImportError:
+    print("""ERROR: requests or requests-oauthlib Python module not found
+
+Please install the requests and requests-oauthlib modules into your
+Python environment.
+
+One way is to install them system-wide, e.g., on Debian GNU/Linux:
+
+  $ sudo apt-get install python3-requests python3-requests-oauthlib
+
+Or you can install them into a local virtual environment and run this
+script in that environment:
+
+  $ python -m venv venv
+  $ source ./venv/bin/activate
+  (venv) $ pip3 install requests requests-oauthlib
+  (venv) $ ./pdc-sync-users-and-orgs --help  # this should work now
+""")
+    sys.exit(3)
+
+EXIT_OK = 0
+EXIT_USER_SYNC_FAILED = 1
+EXIT_ORG_SYNC_FAILED = 2
+EXIT_CONFIG_ERROR = 3
+
+DEFAULT_POLL_SECONDS = 10
+MIN_POLL_SECONDS = 1
+MAX_POLL_SECONDS = 300
+DEFAULT_TIMEOUT_SECONDS = 1800
+MIN_TIMEOUT_SECONDS = 30
+MAX_TIMEOUT_SECONDS = 86400
+
+# (connect timeout, read timeout) in seconds for every HTTP request.
+REQUEST_TIMEOUT_SECONDS = (10, 30)
+
+HTTP_STATUS_OK = 200
+HTTP_STATUS_CREATED = 201
+HTTP_STATUS_UNAUTHORIZED = 401
+
+TASK_STATUS_COMPLETED = "completed"
+# The other reported statuses (pending, in_progress) mean "keep
+# waiting"; see the UserSyncTask and OrganizationSyncTask schemas in
+# the PDC OpenAPI specification.
+TASK_TERMINAL_FAILURE_STATUSES = frozenset({"failed", "canceled"})
+
+TOKEN_EXPIRY_MARGIN_SECONDS = 30
+
+# Keycloak 26.8.2 (CVE-2026-19688) requires tokens calling the Admin
+# REST API to carry the built-in `kc-admin-api` client scope, so the
+# token request asks for it explicitly.
+ADMIN_API_SCOPE = "kc-admin-api"
+
+USER_AGENT = "pdc-sync-users-and-orgs/1.0"
+USER_SYNC = "users"
+ORGANIZATION_SYNC = "organizations"
+
+
+class HttpRequestFailure(Exception):
+    """One HTTP request attempt failed at the transport level."""
+
+
+class SyncError(Exception):
+    """One sync phase failed in a way that retrying won't fix."""
+
+
+def log(message):
+    """Print a UTC-timestamped line to stderr, where cron mail looks."""
+    timestamp = datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
+    print(f"{timestamp} {message}", file=sys.stderr)
+
+
+def fail(message, exit_code=EXIT_CONFIG_ERROR):
+    """Log a fatal problem and exit with the given code."""
+    log(f"FATAL: {message}")
+    sys.exit(exit_code)
+
+
+def require_env(name):
+    """Return a required, non-empty environment variable's value."""
+    value = os.environ.get(name)
+    if value is None or value.strip() == "":
+        fail(f"The required environment variable {name} is not set.")
+    return value
+
+
+def read_int_env(name, default, minimum, maximum):
+    """Read an optional integer environment variable, bounds-checked."""
+    raw_value = os.environ.get(name)
+    if raw_value is None or raw_value.strip() == "":
+        return default
+    try:
+        value = int(raw_value)
+    except ValueError:
+        fail(f"The environment variable {name} must be an integer; got {raw_value!r}.")
+    if not minimum <= value <= maximum:
+        fail(
+            f"The environment variable {name} must be between "
+            f"{minimum} and {maximum}; got {value}."
+        )
+    return value
+
+
+def validate_http_url(url, name, require_https=False):
+    """Return the URL trimmed of a trailing slash, requiring http(s); optionally https-only."""
+    parsed = urlparse(url)
+    if parsed.scheme not in ("http", "https") or not parsed.netloc:
+        fail(f"{name} must be an http(s) URL with a host; got {url!r}.")
+    if require_https and parsed.scheme != "https":
+        fail(f"{name} must be an https URL; got {url!r}.")
+    if parsed.query or parsed.fragment:
+        fail(f"{name} must not carry a query or fragment; got {url!r}.")
+    return url.rstrip("/")
+
+
+def response_snippet(response, limit=200):
+    """Return a short, single-line snippet of a response body."""
+    text = " ".join(response.text.split())
+    if len(text) > limit:
+        text = text[:limit] + "..."
+    return text if text else "(empty body)"
+
+
+def perform_request(session, method, url, **kwargs):
+    """Send one HTTP request, exactly once."""
+    try:
+        response = session.request(
+            method, url, timeout=REQUEST_TIMEOUT_SECONDS, **kwargs
+        )
+    except requests.exceptions.RequestException as err:
+        raise HttpRequestFailure(
+            f"{method} {url} failed: {type(err).__name__}: {err}"
+        ) from err
+    return response
+
+
+@dataclass
+class OidcClient:
+    """The OAuth2 client-credentials context used to call the API."""
+
+    oauth: OAuth2Session
+    token_url: str
+    client_id: str
+    client_secret: str
+
+
+def ensure_access_token(oidc, force_refresh=False):
+    """Fetch an access token when stale; raises SyncError on failure."""
+    token = oidc.oauth.token or {}
+    expires_at = token.get("expires_at")
+    expired = (
+        isinstance(expires_at, (int, float))
+        and time.time() >= expires_at - TOKEN_EXPIRY_MARGIN_SECONDS
+    )
+    if not (force_refresh or expired or not token.get("access_token")):
+        return
+    try:
+        oidc.oauth.fetch_token(
+            token_url=oidc.token_url,
+            client_id=oidc.client_id,
+            client_secret=oidc.client_secret,
+            scope=ADMIN_API_SCOPE,
+        )
+    except (requests.exceptions.RequestException, OAuth2Error, ValueError) as err:
+        raise SyncError(
+            f"Could not fetch an access token from {oidc.token_url}: {err}"
+        ) from err
+
+
+def start_sync(oidc, task_kind, api_url):
+    """POST the sync endpoint and return the created task's id."""
+    url = f"{api_url}/{task_kind}/sync"
+    # The sync job proxies this token to Keycloak; start each phase
+    # with a fresh one.
+    ensure_access_token(oidc, force_refresh=True)
+    try:
+        response = perform_request(oidc.oauth, "POST", url)
+    except HttpRequestFailure as err:
+        raise SyncError(str(err)) from err
+    if response.status_code == HTTP_STATUS_UNAUTHORIZED:
+        log(f"WARNING: POST {url} got HTTP 401; refreshing the access token once.")
+        ensure_access_token(oidc, force_refresh=True)
+        try:
+            response = perform_request(oidc.oauth, "POST", url)
+        except HttpRequestFailure as err:
+            raise SyncError(str(err)) from err
+    if response.status_code != HTTP_STATUS_CREATED:
+        hint = ""
+        if response.status_code == HTTP_STATUS_UNAUTHORIZED:
+            hint = (
+                " (the access token was refreshed once, but the "
+                "request still came back unauthorized)"
+            )
+        raise SyncError(
+            f"POST {url} returned HTTP "
+            f"{response.status_code} instead of "
+            f"{HTTP_STATUS_CREATED}{hint}: "
+            f"{response_snippet(response)}"
+        )
+    task = parse_json_body("POST", url, response)
+    task_id = task.get("id") if isinstance(task, dict) else None
+    if not isinstance(task_id, int):
+        raise SyncError(
+            f"POST {url} response carried no integer `id`: {response_snippet(response)}"
+        )
+    log(f"Started the {task_kind} sync task {task_id}.")
+    return task_id
+
+
+def parse_json_body(method, url, response):
+    """Return the parsed JSON body; a malformed body fails the run."""
+    try:
+        return response.json()
+    except ValueError as err:
+        raise SyncError(
+            f"{method} {url} returned a non-JSON response: {response_snippet(response)}"
+        ) from err
+
+
+def poll_sync_task(oidc, task_kind, task_id, api_url, poll_seconds, timeout_seconds):
+    """Poll one sync task until it completes, fails, or runs overdue."""
+    url = f"{api_url}/{task_kind}/sync/{task_id}"
+    deadline = time.monotonic() + timeout_seconds
+    refreshed_401 = False
+    last_status = None
+    while True:
+        ensure_access_token(oidc)
+        try:
+            response = perform_request(oidc.oauth, "GET", url)
+        except HttpRequestFailure as err:
+            raise SyncError(str(err)) from err
+        status_code = response.status_code
+        if status_code == HTTP_STATUS_OK:
+            task = parse_json_body("GET", url, response)
+            if not isinstance(task, dict):
+                raise SyncError(
+                    f"GET {url} response is not a JSON "
+                    f"object: {response_snippet(response)}"
+                )
+            status = task.get("status")
+            if status == TASK_STATUS_COMPLETED:
+                return task.get("details")
+            if status in TASK_TERMINAL_FAILURE_STATUSES:
+                raise SyncError(
+                    f"The {task_kind} sync task {task_id} ended "
+                    f"with status {status!r}. Response: "
+                    f"{response_snippet(response)}"
+                )
+            if status != last_status:
+                log(f"GET {url}: status {status!r}.")
+                last_status = status
+        elif status_code == HTTP_STATUS_UNAUTHORIZED and not refreshed_401:
+            log(
+                f"WARNING: GET {url} got HTTP "
+                f"{HTTP_STATUS_UNAUTHORIZED}; refreshing the access "
+                f"token once."
+            )
+            ensure_access_token(oidc, force_refresh=True)
+            refreshed_401 = True
+        else:
+            raise SyncError(
+                f"GET {url} returned HTTP {status_code}: {response_snippet(response)}"
+            )
+        remaining_seconds = deadline - time.monotonic()
+        if remaining_seconds <= 0:
+            observed = (
+                f"{last_status!r}"
+                if last_status is not None
+                else "none was ever observed"
+            )
+            raise SyncError(
+                f"The {task_kind} sync task {task_id} did not finish "
+                f"within {timeout_seconds} seconds; last observed "
+                f"status: {observed}."
+            )
+        time.sleep(min(poll_seconds, remaining_seconds))
+
+
+def run_sync(oidc, task_kind, api_url, poll_seconds, timeout_seconds):
+    """Run one sync phase start to finish; True when it completed."""
+    try:
+        task_id = start_sync(oidc, task_kind, api_url)
+        details = poll_sync_task(
+            oidc, task_kind, task_id, api_url, poll_seconds, timeout_seconds
+        )
+    except SyncError as err:
+        log(f"ERROR: the {task_kind} sync did not complete: {err}")
+        return False
+    details_text = (
+        json.dumps(details, sort_keys=True)
+        if details is not None
+        else "(none reported)"
+    )
+    log(f"The {task_kind} sync completed. Details: {details_text}")
+    return True
+
+
+class ArgumentParser(argparse.ArgumentParser):
+    """An argument parser whose usage errors exit EXIT_CONFIG_ERROR.
+
+    argparse would otherwise exit 2, which this program reserves to
+    mean the organization sync did not complete.
+    """
+
+    def error(self, message):
+        self.print_usage(sys.stderr)
+        fail(message)
+
+
+def parse_arguments():
+    """Parse the two positional arguments."""
+    arg_parser = ArgumentParser(
+        prog="pdc-sync-users-and-orgs",
+        description=__doc__,
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+    arg_parser.add_argument(
+        "api_url",
+        metavar="API_URL",
+        help="base URL of the target PDC API, e.g. https://api.example.org",
+    )
+    arg_parser.add_argument(
+        "oidc_base_url",
+        metavar="REALM_URL",
+        help="Keycloak realm URL prefix (the OIDC issuer), "
+        "e.g. https://auth.example.org/realms/pdc",
+    )
+    return arg_parser.parse_args()
+
+
+def main():
+    args = parse_arguments()
+    api_url = validate_http_url(args.api_url, "API_URL")
+    oidc_base_url = validate_http_url(
+        args.oidc_base_url, "REALM_URL", require_https=True
+    )
+    client_id = require_env("DS_OIDC_CLIENT_ID")
+    client_secret = require_env("DS_OIDC_CLIENT_SECRET")
+    poll_seconds = read_int_env(
+        "DS_SYNC_POLL_SECONDS", DEFAULT_POLL_SECONDS, MIN_POLL_SECONDS, MAX_POLL_SECONDS
+    )
+    timeout_seconds = read_int_env(
+        "DS_SYNC_TIMEOUT_SECONDS",
+        DEFAULT_TIMEOUT_SECONDS,
+        MIN_TIMEOUT_SECONDS,
+        MAX_TIMEOUT_SECONDS,
+    )
+
+    oauth = OAuth2Session(client=BackendApplicationClient(client_id=client_id))
+    oauth.headers["User-Agent"] = USER_AGENT
+    oidc = OidcClient(
+        oauth=oauth,
+        token_url=oidc_base_url.rstrip("/") + "/protocol/openid-connect/token",
+        client_id=client_id,
+        client_secret=client_secret,
+    )
+    try:
+        ensure_access_token(oidc)
+    except SyncError as err:
+        fail(str(err))
+
+    user_sync_completed = run_sync(
+        oidc, USER_SYNC, api_url, poll_seconds, timeout_seconds
+    )
+    organization_sync_completed = run_sync(
+        oidc, ORGANIZATION_SYNC, api_url, poll_seconds, timeout_seconds
+    )
+
+    if not user_sync_completed:
+        fail("The user sync did not complete.", EXIT_USER_SYNC_FAILED)
+    if not organization_sync_completed:
+        fail("The organization sync did not complete.", EXIT_ORG_SYNC_FAILED)
+    log("Both the user sync and the organization sync completed.")
+    sys.exit(EXIT_OK)
+
+
+if __name__ == "__main__":
+    main()
