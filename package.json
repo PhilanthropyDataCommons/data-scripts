@@ -22,7 +22,8 @@
     "postProposalVersions": "node --import ./register.mjs src/postProposalVersions.ts",
     "charityNavigator": "node --import ./register.mjs src/index.ts charityNavigator",
     "givingTuesday": "node --import ./register.mjs src/index.ts givingTuesday",
-    "getMetrics": "node --import ./register.mjs src/index.ts getMetrics"
+    "getMetrics": "node --import ./register.mjs src/index.ts getMetrics",
+    "techsoup": "node --import ./register.mjs src/index.ts techsoup"
   },
   "author": "Open Tech Strategies",
   "license": "AGPL-3.0-or-later",
